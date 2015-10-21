@@ -1,0 +1,133 @@
+#!/usr/bin/python
+"""
+
+.. sectionauthor:: Asher Bender <a.bender.dev@gmail.com>
+.. codeauthor:: Asher Bender <a.bender.dev@gmail.com>
+
+"""
+
+import os
+import sys
+import time
+import argparse
+import datetime
+import textwrap
+import multiprocessing
+
+from common import ping
+from common import make_payload
+
+
+if __name__ == '__main__':
+
+    # -------------------------------------------------------------------------
+    #         Configure command-line options & parsing behaviour
+    # -------------------------------------------------------------------------
+
+    man = """Broadcast 'ping' messages.
+
+    Send 'ping' messages at a specified data rate. Each message is a
+    PingMessage() type containing a 'payload' entry. The payload is a string
+    sequence of monotonically increasing integers (default is a length of 800
+    bytes). An example payload:
+
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1
+
+    The number of messages sent per second is determined by the packet size and
+    data rate.
+
+    """
+    formatter_class = argparse.RawDescriptionHelpFormatter
+    parser = argparse.ArgumentParser(formatter_class=formatter_class,
+                                     description=textwrap.dedent(man))
+
+    msg = 'Packet size in bytes.'
+    parser.add_argument('--packet', type=int, help=msg, default=1000)
+
+    msg = 'Data rate in MB/s.'
+    parser.add_argument('--rate', type=float, help=msg, default=5)
+
+    msg = 'Number of broadcasters to launch.'
+    parser.add_argument('--broadcasters', type=int, help=msg, default=1)
+
+    msg = 'Time to send pings.'
+    parser.add_argument('--time', type=float, help=msg, default=None)
+
+    choices = ['lcm', 'mcl', 'rabbitmq']
+    msg = "Underlying transport to use during test. Choose from '%r'."
+    parser.add_argument('--transport', choices=choices, default='mcl')
+
+    msg = 'Print  messages to screen.'
+    parser.add_argument('--verbose', action='store_true', default=False,
+                        help=msg)
+
+    msg = 'Maximum number of character to print to the screen.'
+    parser.add_argument('--length', type=int, help=msg, default=None)
+
+    # Get arguments from the command-line.
+    args = parser.parse_args()
+
+    # Load transport method.
+    if args.transport == 'lcm':
+        from lcm_common import SendPing
+    elif args.transport == 'mcl':
+        from mcl_common import SendPing
+    elif args.transport == 'rabbitmq':
+        from rabbitmq_common import SendPing
+
+    # -------------------------------------------------------------------------
+    #                        Broadcast PongMessage()
+    # -------------------------------------------------------------------------
+
+    # Calculate delay based on packet size and data rate.
+    msg_per_second = 1000000.0 * args.rate / float(args.packet)
+    delay = 1.0 / msg_per_second
+
+    # Create payload.
+    payload = make_payload(args.packet)
+
+    # Create event for controlling execution of processes.
+    start_event = multiprocessing.Event()
+    start_event.clear()
+
+    # Create process for broadcasting PingMessages()
+    processes = list()
+    for i in range(args.broadcasters):
+        pinger = multiprocessing.Process(target=ping,
+                                         args=(SendPing,
+                                               start_event,
+                                               payload,
+                                               delay,
+                                               args.transport,
+                                               args.verbose,
+                                               args.length))
+
+        # Start the broadcasting process.
+        processes.append(pinger)
+        pinger.daemon = True
+        pinger.start()
+        time.sleep(0.1)
+
+    # Wait for the user to terminate the process.
+    print 'Starting pings...'
+    start_event.set()
+    start_time = datetime.datetime.utcnow()
+    while True:
+        try:
+            time.sleep(0.1)
+
+            if (args.time is not None):
+                elapsed_time = datetime.datetime.utcnow() - start_time
+                if elapsed_time.total_seconds() > args.time:
+                    start_event.clear()
+                    break
+
+        except KeyboardInterrupt:
+            start_event.clear()
+            break
+
+    # Allow processes to shut down correctly.
+    for proc in processes:
+        proc.join()
+
+    print 'Pings stopped...'

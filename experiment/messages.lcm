@@ -1,0 +1,19 @@
+package lcm_msgs;
+
+
+struct PingMessage_t
+{
+    int32_t  ping_PID;
+    int64_t  counter;
+    string   payload;
+    string   ping_time;
+}
+
+struct PongMessage_t
+{
+    int32_t  ping_PID;
+    int64_t  counter;
+    int32_t  pong_PID;
+    string   payload;
+    string   pong_time;
+}

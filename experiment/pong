@@ -1,0 +1,111 @@
+#!/usr/bin/python
+"""
+
+.. sectionauthor:: Asher Bender <a.bender.dev@gmail.com>
+.. codeauthor:: Asher Bender <a.bender.dev@gmail.com>
+
+"""
+
+import os
+import sys
+import time
+import argparse
+import datetime
+import textwrap
+import multiprocessing
+
+from common import pong
+from common import make_payload
+
+
+if __name__ == '__main__':
+
+    # -------------------------------------------------------------------------
+    #         Configure command-line options & parsing behaviour
+    # -------------------------------------------------------------------------
+
+    man = """Receive 'ping' messages and issue a 'pong' message.
+
+    Receive 'ping' messages and re-transmit the contents of the message as a
+    'pong' message.
+
+    """
+    formatter_class = argparse.RawDescriptionHelpFormatter
+    parser = argparse.ArgumentParser(formatter_class=formatter_class,
+                                     description=textwrap.dedent(man))
+
+    msg = 'Number of broadcasters to launch.'
+    parser.add_argument('--listeners', type=int, help=msg, default=1)
+
+    msg = 'Time to send pongs.'
+    parser.add_argument('--time', type=float, help=msg, default=None)
+
+    choices = ['lcm', 'mcl', 'rabbitmq']
+    msg = "Underlying transport to use during test. Choose from '%r'."
+    parser.add_argument('--transport', choices=choices, default='mcl')
+
+    msg = 'Print  messages to screen.'
+    parser.add_argument('--verbose', action='store_true', default=False,
+                        help=msg)
+
+    msg = 'Maximum number of character to print to the screen.'
+    parser.add_argument('--length', type=int, help=msg, default=None)
+
+    # Get arguments from the command-line.
+    args = parser.parse_args()
+
+    # Load transport method.
+    if args.transport == 'lcm':
+        from lcm_common import SendPong
+    elif args.transport == 'mcl':
+        from mcl_common import SendPong
+    elif args.transport == 'rabbitmq':
+        from rabbitmq_common import SendPong
+
+    # -------------------------------------------------------------------------
+    #                         Receive PongMessage()
+    # -------------------------------------------------------------------------
+
+    # Create event for controlling execution of processes.
+    start_event = multiprocessing.Event()
+    start_event.clear()
+
+    # Create process for broadcasting PongMessages()
+    processes = list()
+    for i in range(args.listeners):
+        ponger = multiprocessing.Process(target=pong,
+                                         args=(SendPong,
+                                               start_event,
+                                               args.transport,
+                                               args.verbose,
+                                               args.length))
+
+        # Start the broadcasting process.
+        processes.append(ponger)
+        ponger.daemon = False
+        ponger.start()
+        time.sleep(0.1)
+
+    # Wait for the user to terminate the process.
+    print 'Starting pongs...'
+    start_event.set()
+    start_time = datetime.datetime.utcnow()
+    while True:
+        try:
+            time.sleep(0.1)
+
+            if (args.time is not None):
+                elapsed_time = datetime.datetime.utcnow() - start_time
+                if elapsed_time.total_seconds() > args.time:
+                    start_event.clear()
+                    break
+
+        except KeyboardInterrupt:
+            start_event.clear()
+            break
+
+    # Allow processes to shut down correctly.
+    for proc in processes:
+        proc.join()
+
+    print 'Pongs stopped...'
