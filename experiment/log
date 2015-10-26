@@ -41,11 +41,11 @@ if __name__ == '__main__':
 
     # Load transport method.
     if args.transport == 'lcm':
-        from lcm_common import LogPingPong
+        from common.lcm import LogPingPong
     elif args.transport == 'mcl':
-        from mcl_common import LogPingPong
+        from common.mcl import LogPingPong
     elif args.transport == 'rabbitmq':
-        from rabbitmq_common import LogPingPong
+        from common.rabbitmq import LogPingPong
 
     # -------------------------------------------------------------------------
     #                          Log Network Messages

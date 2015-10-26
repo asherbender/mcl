@@ -1,12 +1,14 @@
+from __future__ import absolute_import
+
 import time
 import Queue
 import mcl.message.messages
-from common import print_if
-from common import get_utc_string
 from mcl.network.udp import Connection
 from mcl.network.network import MessageListener
 from mcl.network.network import MessageBroadcaster
 
+from .common import print_if
+from .common import get_utc_string
 
 ping_URL = 'ff15::c75d:ce41:ea8e:000a'
 pong_URL = 'ff15::c75d:ce41:ea8e:000b'

@@ -14,8 +14,8 @@ import datetime
 import textwrap
 import multiprocessing
 
-from common import ping
-from common import make_payload
+from common.common import ping
+from common.common import make_payload
 
 
 if __name__ == '__main__':
@@ -69,11 +69,11 @@ if __name__ == '__main__':
 
     # Load transport method.
     if args.transport == 'lcm':
-        from lcm_common import SendPing
+        from common.lcm import SendPing
     elif args.transport == 'mcl':
-        from mcl_common import SendPing
+        from common.mcl import SendPing
     elif args.transport == 'rabbitmq':
-        from rabbitmq_common import SendPing
+        from common.rabbitmq import SendPing
 
     # -------------------------------------------------------------------------
     #                        Broadcast PongMessage()

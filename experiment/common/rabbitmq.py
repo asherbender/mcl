@@ -1,13 +1,17 @@
+from __future__ import absolute_import
+
 import time
 import pika
 import Queue
 import msgpack
 import threading
-from common import print_if
-from common import get_utc_string
+
+from .common import print_if
+from .common import get_utc_string
 
 PORT = 5672
-HOSTNAME = '10.0.0.69'
+HOSTNAME = '10.0.0.101'
+HOSTNAME = 'localhost'
 PING_EXCHANGE = 'ping'
 PONG_EXCHANGE = 'pong'
 

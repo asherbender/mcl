@@ -1,13 +1,15 @@
+from __future__ import absolute_import
+
 import lcm
 import time
 import Queue
 import select
 import threading
-from common import print_if
-from common import get_utc_string
-from lcm_msgs import PingMessage_t
-from lcm_msgs import PongMessage_t
 
+from .common import print_if
+from .common import get_utc_string
+from .lcm_msgs import PingMessage_t
+from .lcm_msgs import PongMessage_t
 
 PING_CHANNEL = 'LCM-ping'
 PONG_CHANNEL = 'LCM-pong'
