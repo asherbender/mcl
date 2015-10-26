@@ -6,7 +6,8 @@ import threading
 from common import print_if
 from common import get_utc_string
 
-HOSTNAME = 'localhost'
+PORT = 5672
+HOSTNAME = '10.0.0.69'
 PING_EXCHANGE = 'ping'
 PONG_EXCHANGE = 'pong'
 
@@ -16,8 +17,10 @@ class SendPing(object):
     def __init__(self):
 
         # Create connection.
-        connection = pika.ConnectionParameters(host=HOSTNAME)
-        self.__connection = pika.BlockingConnection(connection)
+        credentials = pika.PlainCredentials('test', 'test')
+        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
+                                               credentials=credentials)
+        self.__connection = pika.BlockingConnection(parameters)
 
         # Establish channel.
         self.__channel = self.__connection.channel()
@@ -77,7 +80,11 @@ class SendPong(object):
     def __event_loop(run_event, PID, verbose, max_chars):
 
         # Create connection.
-        parameters = pika.ConnectionParameters(host=HOSTNAME)
+
+        # Create connection.
+        credentials = pika.PlainCredentials('test', 'test')
+        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
+                                               credentials=credentials)
 
         # Establish ping channel.
         ping_connection = pika.BlockingConnection(parameters)
