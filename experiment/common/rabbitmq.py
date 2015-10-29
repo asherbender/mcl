@@ -124,7 +124,7 @@ class SendPong(object):
                                                body=msgpack.dumps(pong))
 
                     if verbose:
-                        s = 'PID %4i (RabbitMQ): sent pong message %i'
+                        s = 'PID %4i (rabbitmq): sent pong message %i'
                         s = s % (PID, pong['counter'])
                         print_if(verbose, s, max_chars)
 

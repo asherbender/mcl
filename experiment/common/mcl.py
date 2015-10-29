@@ -68,7 +68,7 @@ class SendPong(object):
             self.__broadcaster.publish(pong)
 
             if verbose:
-                s = 'PID %4i (MCL): sent pong message %i'
+                s = 'PID %4i (mcl): sent pong message %i'
                 s = s % (PID, pong['counter'])
                 print_if(verbose, s, max_chars)
 

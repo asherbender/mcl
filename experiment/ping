@@ -53,7 +53,7 @@ if __name__ == '__main__':
     msg = 'Time to send pings.'
     parser.add_argument('--time', type=float, help=msg, default=None)
 
-    choices = ['lcm', 'mcl', 'zmq', 'rabbitmq']
+    choices = ['lcm', 'mcl', 'ros', 'zmq', 'rabbitmq']
     msg = "Underlying transport to use during test. Choose from '%r'."
     parser.add_argument('--transport', choices=choices, default='mcl')
 
@@ -72,6 +72,8 @@ if __name__ == '__main__':
         from common.lcm import SendPing
     elif args.transport == 'mcl':
         from common.mcl import SendPing
+    elif args.transport == 'ros':
+        from common.ros import SendPing
     elif args.transport == 'zmq':
         from common.zmq import SendPing
     elif args.transport == 'rabbitmq':
