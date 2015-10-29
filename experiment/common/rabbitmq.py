@@ -19,7 +19,7 @@ PONG_EXCHANGE = 'pong'
 
 class SendPing(object):
 
-    def __init__(self):
+    def __init__(self, ID):
 
         # Create connection.
         credentials = pika.PlainCredentials('test', 'test')
@@ -68,7 +68,7 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, verbose, max_chars):
+    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
 
         # Create event for terminating event loop.
         self.__run_event = threading.Event()
@@ -158,7 +158,7 @@ class LogPingPong(object):
         else:
             return None
 
-    def __init__(self):
+    def __init__(self, broadcasters, listeners):
 
         self.__pings = Queue.Queue()
         self.__pongs = Queue.Queue()

@@ -28,7 +28,7 @@ class PongMessage(mcl.message.messages.Message):
 
 class SendPing(object):
 
-    def __init__(self):
+    def __init__(self, ID):
 
         self.__broadcaster = MessageBroadcaster(PingMessage)
 
@@ -49,7 +49,7 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, verbose, max_chars):
+    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
 
         # Create message listener and broadcaster for PingMessage() and
         # PongMessage().
@@ -96,7 +96,7 @@ class LogPingPong(object):
         else:
             return None
 
-    def __init__(self):
+    def __init__(self, broadcasters, listeners):
 
         self.__pings = Queue.Queue()
         self.__pongs = Queue.Queue()

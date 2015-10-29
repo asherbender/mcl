@@ -34,13 +34,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=formatter_class,
                                      description=textwrap.dedent(man))
 
-    msg = 'Number of broadcasters to launch.'
+    msg = 'Number of broadcasters on network.'
+    parser.add_argument('--broadcasters', type=int, help=msg, default=1)
+
+    msg = 'Number of listeners to launch.'
     parser.add_argument('--listeners', type=int, help=msg, default=1)
 
     msg = 'Time to send pongs.'
     parser.add_argument('--time', type=float, help=msg, default=None)
 
-    choices = ['lcm', 'mcl', 'rabbitmq']
+    choices = ['lcm', 'mcl', 'zmq', 'rabbitmq']
     msg = "Underlying transport to use during test. Choose from '%r'."
     parser.add_argument('--transport', choices=choices, default='mcl')
 
@@ -59,6 +62,8 @@ if __name__ == '__main__':
         from common.lcm import SendPong
     elif args.transport == 'mcl':
         from common.mcl import SendPong
+    elif args.transport == 'zmq':
+        from common.zmq import SendPong
     elif args.transport == 'rabbitmq':
         from common.rabbitmq import SendPong
 
@@ -74,7 +79,8 @@ if __name__ == '__main__':
     processes = list()
     for i in range(args.listeners):
         ponger = multiprocessing.Process(target=pong,
-                                         args=(SendPong,
+                                         args=(SendPong, i,
+                                               args.broadcasters,
                                                start_event,
                                                args.transport,
                                                args.verbose,

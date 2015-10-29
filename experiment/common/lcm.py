@@ -14,12 +14,13 @@ from .lcm_msgs import PongMessage_t
 
 PING_CHANNEL = 'LCM-ping'
 PONG_CHANNEL = 'LCM-pong'
+LCM_ADDRESS = 'udpm://224.0.0.1:7667?ttl=1'
 
 
 class SendPing(object):
 
-    def __init__(self):
-        self.__lc = lcm.LCM('udpm://224.0.0.1:7667?ttl=1')
+    def __init__(self, ID):
+        self.__lc = lcm.LCM(LCM_ADDRESS)
 
     def publish(self, PID, counter, payload):
 
@@ -38,9 +39,9 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, verbose, max_chars):
+    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
 
-        self.__lc = lcm.LCM('udpm://224.0.0.1:7667?ttl=1')
+        self.__lc = lcm.LCM(LCM_ADDRESS)
 
         def callback(channel, data):
             """Repack PingMessage() data as a PongMessage()."""
@@ -108,9 +109,9 @@ class LogPingPong(object):
         else:
             return None
 
-    def __init__(self):
+    def __init__(self, broadcasters, listeners):
 
-        self.__lc = lcm.LCM('udpm://224.0.0.1:7667?ttl=1')
+        self.__lc = lcm.LCM(LCM_ADDRESS)
 
         self.__pings = Queue.Queue()
         self.__pongs = Queue.Queue()

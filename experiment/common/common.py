@@ -102,7 +102,7 @@ def utc_str_to_datetime(s):
     return datetime.datetime.strptime(s, ISO_FMT)
 
 
-def ping(SendPing, start_event, payload, delay, transport, verbose, max_chars):
+def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chars):
 
     # Attempt to set process name.
     PID = os.getpid()
@@ -110,7 +110,7 @@ def ping(SendPing, start_event, payload, delay, transport, verbose, max_chars):
     set_process_name(proc_name)
 
     # Create message broadcaster for PingMessage().
-    ping = SendPing()
+    ping = SendPing(ID)
 
     # Wait until start event has been triggered.
     print_if(verbose, 'PID %4i: starting pings' % PID, max_chars)
@@ -149,7 +149,7 @@ def ping(SendPing, start_event, payload, delay, transport, verbose, max_chars):
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chars)
 
 
-def pong(SendPong, start_event, transport, verbose, max_chars):
+def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chars):
 
     # Attempt to set process name.
     PID = os.getpid()
@@ -159,7 +159,7 @@ def pong(SendPong, start_event, transport, verbose, max_chars):
     # Wait until start event has been triggered.
     msg = 'PID %4i (%s): starting pongs' % (PID, transport)
     print_if(verbose, msg, max_chars)
-    ponger = SendPong(PID, verbose, max_chars)
+    ponger = SendPong(PID, ID, broadcasters, verbose, max_chars)
     while not start_event.is_set():
         pass
 
