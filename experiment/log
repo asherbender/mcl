@@ -12,6 +12,7 @@ import pickle
 import datetime
 import argparse
 import textwrap
+from bz2 import BZ2File
 from collections import OrderedDict
 
 
@@ -75,20 +76,9 @@ if __name__ == '__main__':
     # does not aid analysis. To save significant space, the payload is removed
     # from the messages.
     data = OrderedDict()
-    data['payload'] = logger.pings[0]['payload']
-    data['pings'] = list()
-    data['pongs'] = list()
-
-    # Remove ping payloads.
-    for ping in logger.pings:
-        del(ping['payload'])
-        data['pings'].append(ping)
-
-    # Remove pong payloads.
-    for pong in logger.pongs:
-        del(pong['payload'])
-        data['pongs'].append(pong)
+    data['pings'] = logger.pings
+    data['pongs'] = logger.pongs
 
     # Write data to file.
-    with open(args.fname, 'w') as f:
+    with BZ2File(args.fname, 'w') as f:
         pickle.dump(data, f, protocol=2)

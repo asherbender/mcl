@@ -3,6 +3,8 @@ import time
 import socket
 import datetime
 
+ISO_FMT = '%Y-%m-%dT%H:%M:%S.%f'
+
 
 def get_hostname():
 
@@ -92,7 +94,12 @@ def get_utc_string():
     #
     # To avoid this conditional behaviour ALWAY include microseconds:
     #
-    return datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
+    return datetime.datetime.utcnow().strftime(ISO_FMT)
+
+
+def utc_str_to_datetime(s):
+
+    return datetime.datetime.strptime(s, ISO_FMT)
 
 
 def ping(SendPing, start_event, payload, delay, transport, verbose, max_chars):

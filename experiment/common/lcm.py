@@ -8,6 +8,7 @@ import threading
 
 from .common import print_if
 from .common import get_utc_string
+from .common import utc_str_to_datetime
 from .lcm_msgs import PingMessage_t
 from .lcm_msgs import PongMessage_t
 
@@ -152,23 +153,23 @@ class LogPingPong(object):
         self.__pongs.put('END')
         time.sleep(0.1)
 
-        # Convert ping queue to a list.
+        # Convert ping queue to a list (make stored format identical to other
+        # transports). Drop payload.
         pings = list()
         for item in iter(self.__pings.get, 'END'):
             pings.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
-                          'payload': str(item.payload),
-                          'ping_time': str(item.ping_time)})
+                          'ping_time': utc_str_to_datetime(item.ping_time)})
 
-        # Convert pong queue to a list.
+        # Convert pong queue to a list (make stored format identical to other
+        # transports). Drop payload.
         pongs = list()
         for item in iter(self.__pongs.get, 'END'):
             pongs.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
                           'pong_PID': int(item.pong_PID),
-                          'payload': str(item.payload),
-                          'pong_time': str(item.pong_time)})
+                          'pong_time': utc_str_to_datetime(item.pong_time)})
 
         # Store lists.
-        self.__pings = pings
-        self.__pongs = pongs
+        self.__pings = sorted(pings, key=lambda ping: ping['counter'])
+        self.__pongs = sorted(pongs, key=lambda pong: pong['counter'])

@@ -9,6 +9,7 @@ from mcl.network.network import MessageBroadcaster
 
 from .common import print_if
 from .common import get_utc_string
+from .common import utc_str_to_datetime
 
 ping_URL = 'ff15::c75d:ce41:ea8e:000a'
 pong_URL = 'ff15::c75d:ce41:ea8e:000b'
@@ -114,23 +115,23 @@ class LogPingPong(object):
         self.__pongs.put('END')
         time.sleep(0.1)
 
-        # Convert ping queue to a list (make stored format similar to other
-        # transports).
+        # Convert ping queue to a list (make stored format identical to other
+        # transports). Drop payload.
         pings = list()
         for ping in iter(self.__pings.get, 'END'):
-            ping = dict(ping)
-            del(ping['timestamp'])
-            del(ping['name'])
-            pings.append(ping)
+            pings.append({'ping_PID': int(ping['ping_PID']),
+                          'counter': int(ping['counter']),
+                          'ping_time': utc_str_to_datetime(ping['ping_time'])})
 
-        # Convert pong queue to a list (make stored format similar to other
-        # transports).
+        # Convert pong queue to a list (make stored format identical to other
+        # transports). Drop payload.
         pongs = list()
         for pong in iter(self.__pongs.get, 'END'):
-            pong = dict(pong)
-            del(pong['timestamp'])
-            del(pong['name'])
-            pongs.append(pong)
+            pongs.append({'ping_PID': int(pong['ping_PID']),
+                          'counter': int(pong['counter']),
+                          'pong_PID': int(pong['pong_PID']),
+                          'pong_time': utc_str_to_datetime(pong['pong_time'])})
 
-        self.__pings = pings
-        self.__pongs = pongs
+        # Store lists.
+        self.__pings = sorted(pings, key=lambda ping: ping['counter'])
+        self.__pongs = sorted(pongs, key=lambda pong: pong['counter'])
