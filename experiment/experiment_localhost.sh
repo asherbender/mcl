@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# A data collection time of 10 seconds will result in a 3hr experiment:
+#
+#     3x5x3x17x(10+5)/(60x60) = 3.1875
+#
 TIME=10
 
 clear
@@ -12,30 +16,18 @@ do
     do
         for LISTENERS in '1' '2' '4'
         do
-            for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '15'
+            for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
             do
                 FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
                 echo $TRANSPORT $LISTENERS $RATE
 
-                ./log $FNAME --time $((TIME + 4))    \
-                             --transport $TRANSPORT  \
-                             --listeners $LISTENERS  &
-                sleep 0.5
+                ./localhost.py $FNAME                    \
+                               --listeners $LISTENERS    \
+                               --packet $PACKET          \
+                               --rate $RATE              \
+                               --transport $TRANSPORT    \
+                               --time $TIME
 
-                ./pong   --time $((TIME + 2))        \
-                         --transport $TRANSPORT      \
-                         --listeners $LISTENERS      &
-                sleep 0.5
-
-                ./ping   --time $TIME                \
-                         --transport $TRANSPORT      \
-                         --rate $RATE                \
-                         --packet $PACKET
-
-                while [ $(ps aux | grep -c 'usr/bin/python ./log') -gt 1 ]
-                do
-                    sleep 0.5
-                done
                 echo ''
             done
         done
