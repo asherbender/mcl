@@ -58,8 +58,6 @@ class SendPing(object):
         #
         self.__channel.basic_publish(exchange=PING_EXCHANGE,
                                      routing_key='',
-                                     mandatory=False,
-                                     immediate=False,
                                      body=msgpack.dumps(message))
 
     def close(self):
@@ -119,8 +117,6 @@ class SendPong(object):
 
                     pong_channel.basic_publish(exchange=PONG_EXCHANGE,
                                                routing_key='',
-                                               mandatory=False,
-                                               immediate=False,
                                                body=msgpack.dumps(pong))
 
                     if verbose:
@@ -189,19 +185,16 @@ class LogPingPong(object):
 
         # Create connection.
         parameters = pika.ConnectionParameters(host=HOSTNAME)
-
-        # Establish ping channel.
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
+
         channel.exchange_declare(exchange=exchange, type='topic')
-        result = channel.queue_declare(exclusive=True)
-        queue_name = result.method.queue
-        channel.queue_bind(exchange=exchange, queue=queue_name,
-                           routing_key='#')
+        name = channel.queue_declare(exclusive=True).method.queue
+        channel.queue_bind(exchange=exchange, queue=name, routing_key='#')
 
         try:
             while run_event.is_set():
-                method, header, payload = channel.basic_get(queue=queue_name,
+                method, header, payload = channel.basic_get(queue=name,
                                                             no_ack=True)
                 if method:
                     queue.put(msgpack.loads(payload))
