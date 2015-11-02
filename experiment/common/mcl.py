@@ -1,11 +1,10 @@
 from __future__ import absolute_import
 
 import time
-import Queue
-import mcl.message.messages
+import msgpack
 from mcl.network.udp import Connection
-from mcl.network.network import MessageListener
-from mcl.network.network import MessageBroadcaster
+from mcl.network.udp import RawListener
+from mcl.network.udp import RawBroadcaster
 
 from .common import print_if
 from .common import get_utc_string
@@ -15,32 +14,22 @@ ping_URL = 'ff15::c75d:ce41:ea8e:000a'
 pong_URL = 'ff15::c75d:ce41:ea8e:000b'
 
 
-class PingMessage(mcl.message.messages.Message):
-    mandatory = ('ping_PID', 'counter', 'payload', 'ping_time')
-    connection = Connection(ping_URL)
-
-
-class PongMessage(mcl.message.messages.Message):
-    mandatory = ('ping_PID', 'counter',
-                 'pong_PID', 'payload', 'pong_time')
-    connection = Connection(pong_URL)
-
-
 class SendPing(object):
 
     def __init__(self, ID):
 
-        self.__broadcaster = MessageBroadcaster(PingMessage)
+        self.__broadcaster = RawBroadcaster(Connection(ping_URL))
 
     def publish(self, PID, counter, payload):
 
-        ping = PingMessage(ping_PID=PID,
-                           counter=counter,
-                           payload=payload,
-                           ping_time=get_utc_string())
+        # Create message
+        message = {'ping_PID': PID,
+                   'counter': counter,
+                   'payload': payload,
+                   'ping_time': get_utc_string()}
 
         # Publish message.
-        self.__broadcaster.publish(ping)
+        self.__broadcaster.publish(msgpack.dumps(message))
 
     def close(self):
 
@@ -53,19 +42,20 @@ class SendPong(object):
 
         # Create message listener and broadcaster for PingMessage() and
         # PongMessage().
-        self.__listener = MessageListener(PingMessage)
-        self.__broadcaster = MessageBroadcaster(PongMessage)
+        self.__listener = RawListener(Connection(ping_URL))
+        self.__broadcaster = RawBroadcaster(Connection(pong_URL))
 
         def callback(data):
             """Repack PingMessage() data as a PongMessage()."""
 
-            pong = PongMessage(ping_PID=data['ping_PID'],
-                               counter=data['counter'],
-                               pong_PID=PID,
-                               payload=data['payload'],
-                               pong_time=get_utc_string())
+            ping = msgpack.loads(data['payload'])
+            pong = {'ping_PID': ping['ping_PID'],
+                    'counter': ping['counter'],
+                    'pong_PID': PID,
+                    'payload': ping['payload'],
+                    'pong_time': get_utc_string()}
 
-            self.__broadcaster.publish(pong)
+            self.__broadcaster.publish(msgpack.dumps(pong))
 
             if verbose:
                 s = 'PID %4i (mcl): sent pong message %i'
@@ -98,27 +88,25 @@ class LogPingPong(object):
 
     def __init__(self, broadcasters, listeners):
 
-        self.__pings = Queue.Queue()
-        self.__pongs = Queue.Queue()
-        self.__ping_listener = MessageListener(PingMessage)
-        self.__pong_listener = MessageListener(PongMessage)
+        self.__pings = list()
+        self.__pongs = list()
+        self.__ping_listener = RawListener(Connection(ping_URL))
+        self.__pong_listener = RawListener(Connection(pong_URL))
 
-        self.__ping_listener.subscribe(lambda msg: self.__pings.put(msg))
-        self.__pong_listener.subscribe(lambda msg: self.__pongs.put(msg))
+        self.__ping_listener.subscribe(lambda msg: self.__pings.append(msgpack.loads(msg['payload'])))
+        self.__pong_listener.subscribe(lambda msg: self.__pongs.append(msgpack.loads(msg['payload'])))
 
     def close(self):
 
         # Stop listening for data.
         self.__ping_listener.close()
         self.__pong_listener.close()
-        self.__pings.put('END')
-        self.__pongs.put('END')
         time.sleep(0.1)
 
         # Convert ping queue to a list (make stored format identical to other
         # transports). Drop payload.
         pings = list()
-        for ping in iter(self.__pings.get, 'END'):
+        for ping in self.__pings:
             pings.append({'ping_PID': int(ping['ping_PID']),
                           'counter': int(ping['counter']),
                           'ping_time': utc_str_to_datetime(ping['ping_time'])})
@@ -126,7 +114,7 @@ class LogPingPong(object):
         # Convert pong queue to a list (make stored format identical to other
         # transports). Drop payload.
         pongs = list()
-        for pong in iter(self.__pongs.get, 'END'):
+        for pong in self.__pongs:
             pongs.append({'ping_PID': int(pong['ping_PID']),
                           'counter': int(pong['counter']),
                           'pong_PID': int(pong['pong_PID']),
