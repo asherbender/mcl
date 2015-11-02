@@ -1,0 +1,36 @@
+Localhost Experiments
+-------------------------------------------------------------------------------
+1) Ensure dependencies have been installed. The script:
+
+       ./conf/install.sh 
+
+   has been written for the 'blackbox' clients. Follow the steps in this script 
+   with the appropriate modifications for your own system.
+
+2) To perform the localhost experiment run:
+
+       ./experiment_localhost.sh
+
+
+Network Experiments
+-------------------------------------------------------------------------------   
+NOTE: The scripts contained in conf/ have been written for our 'blackbox' 
+      units. These may need to be updated (in the future) or modified for a
+      different configuration. Treat these scripts as a guide.
+
+1) Run ./conf/install.sh to install dependencies
+2) Run ./conf/configure.sh to configure on the clients
+3) Run ./conf/configure.sh to configure on the server
+4) Ensure installation/configuration is correct on the server/clients.
+       - All transports are functional.
+       - The server can talk to the clients.
+       - the client clocks are syncronised to the server via NTP.
+5) Run with the appropriate transport:
+
+       ./pong --transport <>
+
+   on N-clients.
+6) Run ./experiment_network.sh with the appropriate transport.
+7) Repeat 5)-6) for 1, 2, 3 clients.
+8) Repeat 5)-7) for all transports.
+
