@@ -18,6 +18,9 @@ NOTE: The scripts contained in conf/ have been written for our 'blackbox'
       units. These may need to be updated (in the future) or modified for a
       different configuration. Treat these scripts as a guide.
 
+      Modify the /etc/hosts file of both the server and clients to allow ROS
+      to communicate.
+
 1) Run ./conf/install.sh to install dependencies
 2) Run ./conf/configure.sh to configure on the clients
 3) Run ./conf/configure.sh to configure on the server

@@ -19,7 +19,7 @@ do
             for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
             do
                 FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
-                echo $TRANSPORT $LISTENERS $RATE
+                echo $TRANSPORT $PACKET $LISTENERS $RATE
 
                 ./localhost.py $FNAME                    \
                                --listeners $LISTENERS    \

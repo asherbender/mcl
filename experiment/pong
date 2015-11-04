@@ -40,6 +40,9 @@ if __name__ == '__main__':
     msg = 'Number of listeners to launch.'
     parser.add_argument('--listeners', type=int, help=msg, default=1)
 
+    msg = 'Force a specific pong ID.'
+    parser.add_argument('--ID', type=int, help=msg, default=None)
+
     msg = 'Time to send pongs.'
     parser.add_argument('--time', type=float, help=msg, default=None)
 
@@ -79,19 +82,32 @@ if __name__ == '__main__':
 
     # Create process for broadcasting PongMessages()
     processes = list()
-    for i in range(args.listeners):
-        ponger = multiprocessing.Process(target=pong,
-                                         args=(SendPong, i,
-                                               args.broadcasters,
-                                               start_event,
-                                               args.transport,
-                                               args.verbose,
-                                               args.length))
 
-        # Start the broadcasting process.
-        processes.append(ponger)
-        ponger.daemon = False
-        ponger.start()
+    # Force a specific ponger ID.
+    if args.ID:
+        processes.append(multiprocessing.Process(target=pong,
+                                                 args=(SendPong, args.ID,
+                                                       args.broadcasters,
+                                                       start_event,
+                                                       args.transport,
+                                                       args.verbose,
+                                                       args.length)))
+
+    # Launch a number of 'ponger' listeners.
+    else:
+        for i in range(args.listeners):
+            processes.append(multiprocessing.Process(target=pong,
+                                                     args=(SendPong, i,
+                                                           args.broadcasters,
+                                                           start_event,
+                                                           args.transport,
+                                                           args.verbose,
+                                                           args.length)))
+
+    # Start the listeners.
+    for process in processes:
+        process.daemon = True
+        process.start()
         time.sleep(0.1)
 
     # Wait for the user to terminate the process.

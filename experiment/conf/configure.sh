@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Note if the IP is reconfigured here, ./ntp_client.conf will need to be 
+# Note if the IP is reconfigured here, ./ntp_client.conf will need to be
 # modified.
 SERVER_IP=100
 
@@ -8,11 +8,15 @@ SERVER_IP=100
 # Get IP address from hostname
 #-------------------------------------------------------------------------------
 
+# Set IP address of server.
+if [[ $HOSTNAME == 'ivssg' ]]; then
+    NUMBER=$SERVER_IP
+
 # Set IP address of clients.
-if [[ $HOSTNAME == *'ivssg'* ]]; then
+elif [[ $HOSTNAME == *'ivssg'* ]]; then
     NUMBER=$(echo $HOSTNAME | sed 's/[^0-9]*//g')
 
-# Set IP address of server.
+# Assume host is server.
 else
     NUMBER=$SERVER_IP
 fi
@@ -33,9 +37,8 @@ sysctl -w net.core.rmem_default=2097152
 # Add multicast routes.
 ip route add 224.0.0.0/4 dev eth0
 
-# Enable forwarding.
+# Enable forwarding and disable ignore ICMP broadcasts.
 sysctl -w net.ipv4.ip_forward=1
-# Disable ignore ICMP broadcasts.
 sysctl -w net.ipv4.icmp_echo_ignore_broadcasts=0
 
 #-------------------------------------------------------------------------------
@@ -47,18 +50,28 @@ if [ ! -f /etc/ntp.conf.bak ]; then
     mv /etc/ntp.conf  /etc/ntp.conf.bak
 fi
 
-# Set NTP configuration of clients.
-if [[ $HOSTNAME == *'ivssg'* ]]; then
-    cp ./ntp_client.conf /etc/ntp.conf
+# Kill dhclient.
+killall dhclient
 
-    service ntp stop
-    ntpdate 10.0.0.$SERVER_IP
-    service ntp start
+# Stop NTP server.
+service ntp stop
 
 # Set NTP configuration of server.
+if [[ $HOSTNAME == 'ivssg' ]]; then
+    cp ./ntp_server.conf /etc/ntp.conf
+
+# Set NTP configuration of clients.
+elif [[ $HOSTNAME == *'ivssg'* ]]; then
+    cp ./ntp_client.conf /etc/ntp.conf
+    ntpdate 10.0.0.$SERVER_IP
+
+# Assume host is server.
 else
     cp ./ntp_server.conf /etc/ntp.conf
 fi
+
+# Restart NTP server with new configuration.
+sudo ntpd -c /etc/ntp.conf
 
 #-------------------------------------------------------------------------------
 # Create test user for RabbitMQ

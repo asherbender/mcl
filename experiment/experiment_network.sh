@@ -1,19 +1,28 @@
 #!/bin/bash
 
-TIME=20
+TIME=10
 LISTENERS=3
 TRANSPORT='mcl'
 
 clear
-for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8'  '9'  '10' '15'
+for PACKET in '4000' '2000' '1000'
 do
-    FNAME=./data/network_${TRANSPORT}_${LISTENERS}_${RATE}.pkl
-    echo $TRANSPORT $LISTENERS $RATE
+    DIR=./data/network/${PACKET}
+    mkdir -p ${DIR}
 
-    ./ping   --time $((TIME + 2)) --transport $TRANSPORT --rate $RATE           &
-    sleep 0.25
+    for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
+    do
+        FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
+        echo $TRANSPORT $PACKET $LISTENERS $RATE
 
-    ./log $FNAME --time $TIME --transport $TRANSPORT
-    sleep 5
-    echo ''
+        ./network.py $FNAME                    \
+                     --listeners $LISTENERS    \
+                     --packet $PACKET          \
+                     --rate $RATE              \
+                     --transport $TRANSPORT    \
+                     --time $TIME
+
+        sleep 3
+        echo ''
+    done
 done

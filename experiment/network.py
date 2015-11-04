@@ -16,7 +16,6 @@ from bz2 import BZ2File
 from collections import OrderedDict
 
 from common.common import ping
-from common.common import pong
 from common.common import make_payload
 
 
@@ -75,7 +74,7 @@ if __name__ == '__main__':
         import common.rabbitmq as transport
 
     # -------------------------------------------------------------------------
-    #                             Start logging
+    #                        Broadcast PingMessage()
     # -------------------------------------------------------------------------
 
     # Calculate delay based on packet size and data rate.
@@ -87,44 +86,12 @@ if __name__ == '__main__':
 
     # Create event for controlling execution of processes.
     ping_start_event = multiprocessing.Event()
-    pong_start_event = multiprocessing.Event()
     ping_start_event.clear()
-    pong_start_event.clear()
 
     # Start logging pings and pongs.
     print 'Logging messages...'
     logger = transport.LogPingPong(1, args.listeners)
     time.sleep(0.1)
-
-    # -------------------------------------------------------------------------
-    #                        Broadcast PongMessage()
-    # -------------------------------------------------------------------------
-
-    # Create process for broadcasting PongMessages()
-    pongers = list()
-    for i in range(args.listeners):
-        ponger = multiprocessing.Process(target=pong,
-                                         args=(transport.SendPong, i, 1,
-                                               pong_start_event,
-                                               args.transport,
-                                               args.verbose,
-                                               args.length))
-
-        # Start the broadcasting process.
-        pongers.append(ponger)
-        ponger.daemon = False
-        ponger.start()
-
-        time.sleep(0.1)
-
-    # Synchronise pong services.
-    print 'Starting pongs...'
-    pong_start_event.set()
-    time.sleep(0.1)
-
-    # -------------------------------------------------------------------------
-    #                        Broadcast PingMessage()
-    # -------------------------------------------------------------------------
 
     # Create process for broadcasting PingMessages()
     pinger = multiprocessing.Process(target=ping,
@@ -143,10 +110,6 @@ if __name__ == '__main__':
     time.sleep(0.1)
     ping_start_event.set()
 
-    # -------------------------------------------------------------------------
-    #                      Wait for experiment to end
-    # -------------------------------------------------------------------------
-
     # Wait for the user to terminate the process or timeout.
     start_time = datetime.datetime.utcnow()
     while True:
@@ -161,22 +124,9 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             break
 
-    # -------------------------------------------------------------------------
-    #                           Shutdown services
-    # -------------------------------------------------------------------------
-
     # Shutdown pinger.
     ping_start_event.clear()
     pinger.join()
-    print 'Pings stopped.'
-
-    # Shutdown pongers.
-    pong_start_event.clear()
-    for ponger in pongers:
-        ponger.join()
-    print 'Pongs stopped.'
-
-    # Stop logging pings and pongs.
     logger.close()
     print 'Stopped logging messages'
 
