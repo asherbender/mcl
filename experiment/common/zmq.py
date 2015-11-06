@@ -11,8 +11,24 @@ from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 BASE_PORT = 5550
-ZMQ_PING = 'tcp://127.0.0.1'
-ZMQ_PONG = 'tcp://127.0.0.2'
+LOCALHOST = False
+if LOCALHOST:
+    ZMQ_PING = 'tcp://127.0.0.1'
+    ZMQ_PONG = 'tcp://127.0.0.2'
+else:
+    ZMQ_PING = 'tcp://10.0.0.100'
+    ZMQ_PONG = 'tcp://10.0.0.'
+
+
+def create_ping_address(ip, port, ID):
+    return '%s:%i' % (ip, port + ID)
+
+
+def create_pong_address(ip, port, ID):
+    if LOCALHOST:
+        return '%s:%i' % (ip, port + ID)
+    else:
+        return '%s%i:%i' % (ip, ID, port + ID)
 
 
 class SendPing(object):
@@ -22,7 +38,7 @@ class SendPing(object):
         # Create socket.
         self.__context = zmq.Context()
         self.__socket = self.__context.socket(zmq.PUB)
-        self.__socket.bind('%s:%i' % (ZMQ_PING, BASE_PORT + ID))
+        self.__socket.bind(create_ping_address(ZMQ_PING, BASE_PORT, ID))
 
     def publish(self, PID, counter, payload):
 
@@ -67,11 +83,11 @@ class SendPong(object):
 
         # Connect socket to all 'ping' publishers.
         for i in range(0, broadcasters):
-            ping_socket.connect('%s:%i' % (ZMQ_PING, BASE_PORT + i))
+            ping_socket.connect(create_ping_address(ZMQ_PING, BASE_PORT, i))
 
         # Create socket for sending pong messages.
         pong_socket = context.socket(zmq.PUB)
-        pong_socket.bind('%s:%i' % (ZMQ_PONG, BASE_PORT + ID))
+        pong_socket.bind(create_pong_address(ZMQ_PONG, BASE_PORT, ID))
 
         # Create object for retrieving messages.
         poller = zmq.Poller()
@@ -158,11 +174,14 @@ class LogPingPong(object):
 
         # Connect socket to all 'ping' publishers.
         for i in range(0, broadcasters):
-            ping_socket.connect('%s:%i' % (ZMQ_PING, BASE_PORT + i))
+            ping_socket.connect(create_ping_address(ZMQ_PING, BASE_PORT, i))
 
         # Connect socket to all 'pong' publishers.
         for i in range(0, listeners):
-            pong_socket.connect('%s:%i' % (ZMQ_PONG, BASE_PORT + i))
+            if LOCALHOST:
+                pong_socket.connect(create_pong_address(ZMQ_PONG, BASE_PORT, i))
+            else:
+                pong_socket.connect(create_pong_address(ZMQ_PONG, BASE_PORT, i + 1))
 
         # Create object for retrieving messages.
         poller = zmq.Poller()

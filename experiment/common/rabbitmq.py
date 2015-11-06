@@ -11,8 +11,11 @@ from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 PORT = 5672
-HOSTNAME = '10.0.0.101'
-HOSTNAME = 'localhost'
+LOCALHOST = False
+if LOCALHOST:
+    HOSTNAME = 'localhost'
+else:
+    HOSTNAME = '10.0.0.101'
 PING_EXCHANGE = 'ping'
 PONG_EXCHANGE = 'pong'
 
@@ -61,6 +64,7 @@ class SendPing(object):
                                      body=msgpack.dumps(message))
 
     def close(self):
+        self.__channel.close()
         self.__connection.close()
 
 
@@ -97,6 +101,7 @@ class SendPong(object):
         queue_name = result.method.queue
         ping_channel.queue_bind(exchange=PING_EXCHANGE, queue=queue_name,
                                 routing_key='#')
+        ping_channel.queue_purge(queue=queue_name)
 
         # Establish pong channel.
         pong_connection = pika.BlockingConnection(parameters)
@@ -126,6 +131,9 @@ class SendPong(object):
 
         except KeyboardInterrupt:
             pass
+
+        ping_channel.queue_purge(queue=queue_name)
+        ping_channel.queue_delete(queue=queue_name)
 
         ping_channel.close()
         ping_connection.close()
@@ -184,13 +192,16 @@ class LogPingPong(object):
     def __event_loop(run_event, exchange, queue):
 
         # Create connection.
-        parameters = pika.ConnectionParameters(host=HOSTNAME)
+        credentials = pika.PlainCredentials('test', 'test')
+        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
+                                               credentials=credentials)
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
 
         channel.exchange_declare(exchange=exchange, type='topic')
         name = channel.queue_declare(exclusive=True).method.queue
         channel.queue_bind(exchange=exchange, queue=name, routing_key='#')
+        channel.queue_purge(queue=name)
 
         try:
             while run_event.is_set():
@@ -202,6 +213,8 @@ class LogPingPong(object):
         except KeyboardInterrupt:
             pass
 
+        channel.queue_purge(queue=name)
+        channel.queue_delete(queue=name)
         channel.close()
         connection.close()
 
