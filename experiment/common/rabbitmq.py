@@ -1,17 +1,17 @@
 from __future__ import absolute_import
 
-import time
 import pika
-import Queue
+import time
 import msgpack
 import threading
+import multiprocessing
 
 from .common import print_if
 from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 PORT = 5672
-LOCALHOST = False
+LOCALHOST = True
 if LOCALHOST:
     HOSTNAME = 'localhost'
 else:
@@ -20,19 +20,55 @@ PING_EXCHANGE = 'ping'
 PONG_EXCHANGE = 'pong'
 
 
+def create_channel(exchange_name):
+
+        # Create connection parameters.
+        credentials = pika.PlainCredentials('test', 'test')
+        parameters = pika.ConnectionParameters(host=HOSTNAME,
+                                               port=PORT,
+                                               credentials=credentials)
+
+        # Create connection.
+        connection = pika.BlockingConnection(parameters)
+
+        # Establish channel.
+        channel = connection.channel()
+        channel.exchange_declare(exchange=exchange_name,
+                                 exchange_type='fanout')
+
+        return connection, channel
+
+
+def create_queue(channel, exchange_name):
+
+    # Create queue for ping messages.
+    result = channel.queue_declare(exclusive=True, auto_delete=True)
+    queue_name = result.method.queue
+
+    # Bind queue to exchange.
+    channel.queue_bind(exchange=exchange_name,
+                       queue=queue_name)
+
+    return queue_name
+
+
+def channel_get(channel, queue_name):
+
+    method, header, payload = channel.basic_get(queue=queue_name)
+
+    if method:
+        channel.basic_ack(delivery_tag=method.delivery_tag, multiple=True)
+        return payload
+    else:
+        return None
+
+
 class SendPing(object):
 
     def __init__(self, ID):
 
-        # Create connection.
-        credentials = pika.PlainCredentials('test', 'test')
-        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
-                                               credentials=credentials)
-        self.__connection = pika.BlockingConnection(parameters)
-
-        # Establish channel.
-        self.__channel = self.__connection.channel()
-        self.__channel.exchange_declare(exchange=PING_EXCHANGE, type='topic')
+        # Create connection and channel.
+        self.__connection, self.__channel = create_channel(PING_EXCHANGE)
 
     def publish(self, PID, counter, payload):
 
@@ -43,25 +79,12 @@ class SendPing(object):
                    'ping_time': get_utc_string()}
 
         # Publish data to exchange.
-        #
-        # Note: The 'mandatory' flag tells the server how to react if the
-        #       message cannot be routed to a queue. If this flag is set, the
-        #       server will return an unroutable message with a Return
-        #       method. If this flag is zero, the server silently drops the
-        #       message
-        #
-        #       The 'immediate' tells the server how to react if the message
-        #       cannot be routed to a queue consumer immediately. If this flag
-        #       is set, the server will return an undeliverable message with a
-        #       Return method. If this flag is zero, the server will queue the
-        #       message, but with no guarantee that it will ever be consumed.
-        #
-        #       Both 'mandatory' and 'immediate' default to False. They are
-        #       explicitly defined here to document publishing behaviour.
-        #
-        self.__channel.basic_publish(exchange=PING_EXCHANGE,
-                                     routing_key='',
-                                     body=msgpack.dumps(message))
+        try:
+            self.__channel.publish(exchange=PING_EXCHANGE,
+                                   routing_key='',
+                                   body=msgpack.dumps(message))
+        except:
+            pass
 
     def close(self):
         self.__channel.close()
@@ -86,33 +109,18 @@ class SendPong(object):
     @staticmethod
     def __event_loop(run_event, PID, verbose, max_chars):
 
-        # Create connection.
+        # Create connections and channels.
+        ping_connection, ping_channel = create_channel(PING_EXCHANGE)
+        pong_connection, pong_channel = create_channel(PONG_EXCHANGE)
 
-        # Create connection.
-        credentials = pika.PlainCredentials('test', 'test')
-        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
-                                               credentials=credentials)
-
-        # Establish ping channel.
-        ping_connection = pika.BlockingConnection(parameters)
-        ping_channel = ping_connection.channel()
-        ping_channel.exchange_declare(exchange=PING_EXCHANGE, type='topic')
-        result = ping_channel.queue_declare(exclusive=True)
-        queue_name = result.method.queue
-        ping_channel.queue_bind(exchange=PING_EXCHANGE, queue=queue_name,
-                                routing_key='#')
-        ping_channel.queue_purge(queue=queue_name)
-
-        # Establish pong channel.
-        pong_connection = pika.BlockingConnection(parameters)
-        pong_channel = pong_connection.channel()
-        pong_channel.exchange_declare(exchange=PONG_EXCHANGE, type='topic')
+        # Create queue for receiving ping messages.
+        queue_name = create_queue(ping_channel, PING_EXCHANGE)
 
         try:
             while run_event.is_set():
-                method, header, payload = ping_channel.basic_get(queue=queue_name,
-                                                                 no_ack=True)
-                if method:
+                payload = channel_get(ping_channel, queue_name)
+
+                if payload:
                     ping = msgpack.loads(payload)
                     pong = {'ping_PID': ping['ping_PID'],
                             'counter': ping['counter'],
@@ -120,9 +128,9 @@ class SendPong(object):
                             'payload': ping['payload'],
                             'pong_time': get_utc_string()}
 
-                    pong_channel.basic_publish(exchange=PONG_EXCHANGE,
-                                               routing_key='',
-                                               body=msgpack.dumps(pong))
+                    pong_channel.publish(exchange=PONG_EXCHANGE,
+                                         routing_key='',
+                                         body=msgpack.dumps(pong))
 
                     if verbose:
                         s = 'PID %4i (rabbitmq): sent pong message %i'
@@ -132,9 +140,9 @@ class SendPong(object):
         except KeyboardInterrupt:
             pass
 
+        # Close connections.
         ping_channel.queue_purge(queue=queue_name)
         ping_channel.queue_delete(queue=queue_name)
-
         ping_channel.close()
         ping_connection.close()
         pong_channel.close()
@@ -164,24 +172,24 @@ class LogPingPong(object):
 
     def __init__(self, broadcasters, listeners):
 
-        self.__pings = Queue.Queue()
-        self.__pongs = Queue.Queue()
+        self.__pings = multiprocessing.Queue()
+        self.__pongs = multiprocessing.Queue()
 
         # Create event for terminating event loop.
-        self.__run_event = threading.Event()
+        self.__run_event = multiprocessing.Event()
         self.__run_event.set()
 
         # Create thread for logging pings.
-        self.__ping_loop = threading.Thread(target=self.__event_loop,
-                                            args=(self.__run_event,
-                                                  PING_EXCHANGE,
-                                                  self.__pings))
+        self.__ping_loop = multiprocessing.Process(target=self.__event_loop,
+                                                   args=(self.__run_event,
+                                                         PING_EXCHANGE,
+                                                         self.__pings))
 
         # Create thread for logging pongs.
-        self.__pong_loop = threading.Thread(target=self.__event_loop,
-                                            args=(self.__run_event,
-                                                  PONG_EXCHANGE,
-                                                  self.__pongs))
+        self.__pong_loop = multiprocessing.Process(target=self.__event_loop,
+                                                   args=(self.__run_event,
+                                                         PONG_EXCHANGE,
+                                                         self.__pongs))
 
         self.__ping_loop.daemon = True
         self.__pong_loop.daemon = True
@@ -189,49 +197,61 @@ class LogPingPong(object):
         self.__pong_loop.start()
 
     @staticmethod
-    def __event_loop(run_event, exchange, queue):
+    def __event_loop(run_event, exchange_name, queue):
 
-        # Create connection.
-        credentials = pika.PlainCredentials('test', 'test')
-        parameters = pika.ConnectionParameters(host=HOSTNAME, port=PORT,
-                                               credentials=credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
+        # Create connections and channels.
+        connection, channel = create_channel(exchange_name)
 
-        channel.exchange_declare(exchange=exchange, type='topic')
-        name = channel.queue_declare(exclusive=True).method.queue
-        channel.queue_bind(exchange=exchange, queue=name, routing_key='#')
-        channel.queue_purge(queue=name)
+        # Create queue for receiving messages.
+        queue_name = create_queue(channel, exchange_name)
+        time.sleep(0.25)
+        channel.queue_purge(queue=queue_name)
 
+        # Wait for messages.
+        messages = list()
         try:
             while run_event.is_set():
-                method, header, payload = channel.basic_get(queue=name,
-                                                            no_ack=True)
-                if method:
-                    queue.put(msgpack.loads(payload))
+                payload = channel_get(channel, queue_name)
+                if payload:
+                    messages.append(payload)
 
         except KeyboardInterrupt:
             pass
 
-        channel.queue_purge(queue=name)
-        channel.queue_delete(queue=name)
+        # Purge messages in queue.
+        while True:
+            query = channel.queue_declare(queue=queue_name, passive=True)
+            if query.method.message_count > 0:
+                payload = channel_get(channel, queue_name)
+            else:
+                break
+
+        # Unpack messages.
+        messages = [msgpack.loads(message) for message in messages]
+
+        # Close connection.
+        channel.queue_purge(queue=queue_name)
+        channel.queue_delete(queue=queue_name)
         channel.close()
         connection.close()
+
+        # Dump data into queue.
+        queue.put(messages)
 
     def close(self):
 
         # Stop listening for data.
         self.__run_event.clear()
+        time.sleep(0.1)
+        self.__pings = self.__pings.get()
+        self.__pongs = self.__pongs.get()
         self.__ping_loop.join()
         self.__pong_loop.join()
-        self.__pings.put('END')
-        self.__pongs.put('END')
-        time.sleep(0.1)
 
         # Convert ping queue to a list (make stored format identical to other
         # transports). Drop payload.
         pings = list()
-        for ping in iter(self.__pings.get, 'END'):
+        for ping in self.__pings:
             pings.append({'ping_PID': int(ping['ping_PID']),
                           'counter': int(ping['counter']),
                           'ping_time': utc_str_to_datetime(ping['ping_time'])})
@@ -239,7 +259,7 @@ class LogPingPong(object):
         # Convert pong queue to a list (make stored format identical to other
         # transports). Drop payload.
         pongs = list()
-        for pong in iter(self.__pongs.get, 'END'):
+        for pong in self.__pongs:
             pongs.append({'ping_PID': int(pong['ping_PID']),
                           'counter': int(pong['counter']),
                           'pong_PID': int(pong['pong_PID']),
