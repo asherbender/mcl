@@ -15,7 +15,7 @@ PORT = 5672
 if LOCALHOST:
     HOSTNAME = 'localhost'
 else:
-    HOSTNAME = '10.0.0.101'
+    HOSTNAME = '10.0.0.100'
 PING_EXCHANGE = 'ping-pong'
 PONG_EXCHANGE = 'ping-pong'
 
@@ -39,8 +39,7 @@ class Publisher(object):
         self.connection = Connection(self.host, self.username, self.password)
         self.channel = self.connection.channel()
         self.channel.exchange.declare(self.__exchange_name,
-                                      exchange_type='topic',
-                                      auto_delete=True)
+                                      exchange_type='topic')
 
     def publish(self, message, topic=''):
 
@@ -71,8 +70,7 @@ class Listener(object):
         self.__channel = self.__connection.channel()
         self.__channel.basic.qos(prefetch_count=65535)
         self.__channel.exchange.declare(exchange_name,
-                                        exchange_type='topic',
-                                        auto_delete=True)
+                                        exchange_type='topic')
 
         # Create queue and bind to exchange.
         queue = self.__channel.queue.declare(exclusive=True, auto_delete=True)
