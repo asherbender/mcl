@@ -84,7 +84,7 @@ class Listener(object):
         # Assign callback for consuming messages.
         self.__channel.basic.consume(self.__on_message,
                                      queue=self.__queue,
-                                     no_ack=False)
+                                     no_ack=True)
 
         # Start processing messages.
         self.__thread = threading.Thread(target=self.__start_IO_loop)
@@ -101,7 +101,6 @@ class Listener(object):
     def __on_message(self, body, channel, header, properties):
 
         self.__callback(body)
-        channel.basic.ack(delivery_tag=header['delivery_tag'])
 
     def close(self):
         self.__connection.close()
