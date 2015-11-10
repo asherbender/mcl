@@ -97,14 +97,14 @@ class LogPingPong(object):
 
     @property
     def pings(self):
-        if isinstance(self.__pings, (list, )):
+        if self.__pings:
             return self.__pings
         else:
             return None
 
     @property
     def pongs(self):
-        if isinstance(self.__pongs, (list, )):
+        if self.__pongs:
             return self.__pongs
         else:
             return None
@@ -113,12 +113,13 @@ class LogPingPong(object):
 
         self.__lc = lcm.LCM(LCM_ADDRESS)
 
-        self.__pings = Queue.Queue()
-        self.__pongs = Queue.Queue()
-        ping_callback = lambda chl, data: self.__pings.put(PingMessage_t.decode(data))
-        pong_callback = lambda chl, data: self.__pongs.put(PongMessage_t.decode(data))
-        self.__pingsub = self.__lc.subscribe(PING_CHANNEL, ping_callback)
-        self.__pongsub = self.__lc.subscribe(PONG_CHANNEL, pong_callback)
+        self.__pings = list()
+        callback = lambda chl, d: self.__pings.append(PingMessage_t.decode(d))
+        self.__ping_subscription = self.__lc.subscribe(PING_CHANNEL, callback)
+
+        self.__pongs = list()
+        callback = lambda chl, d: self.__pongs.append(PongMessage_t.decode(d))
+        self.__pong_subscription = self.__lc.subscribe(PONG_CHANNEL, callback)
 
         # Create event for terminating event loop.
         self.__run_event = threading.Event()
@@ -148,16 +149,13 @@ class LogPingPong(object):
         # Stop listening for data.
         self.__run_event.clear()
         self.__event_loop.join()
-        self.__lc.unsubscribe(self.__pingsub)
-        self.__lc.unsubscribe(self.__pongsub)
-        self.__pings.put('END')
-        self.__pongs.put('END')
-        time.sleep(0.1)
+        self.__lc.unsubscribe(self.__ping_subscription)
+        self.__lc.unsubscribe(self.__pong_subscription)
 
         # Convert ping queue to a list (make stored format identical to other
         # transports). Drop payload.
         pings = list()
-        for item in iter(self.__pings.get, 'END'):
+        for item in self.__pings:
             pings.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
                           'ping_time': utc_str_to_datetime(item.ping_time)})
@@ -165,7 +163,7 @@ class LogPingPong(object):
         # Convert pong queue to a list (make stored format identical to other
         # transports). Drop payload.
         pongs = list()
-        for item in iter(self.__pongs.get, 'END'):
+        for item in self.__pongs:
             pongs.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
                           'pong_PID': int(item.pong_PID),
