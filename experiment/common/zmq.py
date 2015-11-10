@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 import zmq
-import time
 import Queue
 import msgpack
 import threading
@@ -11,7 +10,7 @@ from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 BASE_PORT = 5550
-LOCALHOST = False
+LOCALHOST = True
 if LOCALHOST:
     ZMQ_PING = 'tcp://127.0.0.1'
     ZMQ_PONG = 'tcp://127.0.0.2'
@@ -130,22 +129,24 @@ class LogPingPong(object):
 
     @property
     def pings(self):
-        if isinstance(self.__pings, (list, )):
+        if self.__pings:
             return self.__pings
         else:
             return None
 
     @property
     def pongs(self):
-        if isinstance(self.__pongs, (list, )):
+        if self.__pongs:
             return self.__pongs
         else:
             return None
 
     def __init__(self, broadcasters, listeners):
 
-        self.__pings = Queue.Queue()
-        self.__pongs = Queue.Queue()
+        # Create objects for storing messages.
+        self.__pings = None
+        self.__pongs = None
+        self.__queue = Queue.Queue()
 
         # Create event for terminating event loop.
         self.__run_event = threading.Event()
@@ -156,14 +157,17 @@ class LogPingPong(object):
                                              args=(self.__run_event,
                                                    broadcasters,
                                                    listeners,
-                                                   self.__pings,
-                                                   self.__pongs))
+                                                   self.__queue))
 
         self.__event_loop.daemon = True
         self.__event_loop.start()
 
     @staticmethod
-    def __event_loop(run_event, broadcasters, listeners, ping_queue, pong_queue):
+    def __event_loop(run_event, broadcasters, listeners, queue):
+
+        # Create local lists for storing messages.
+        ping_list = list()
+        pong_list = list()
 
         # Create sockets for receiving ping and pong messages.
         context = zmq.Context()
@@ -194,32 +198,36 @@ class LogPingPong(object):
 
                 # Store pongs.
                 if pong_socket in socks and socks[pong_socket] == zmq.POLLIN:
-                    pong_queue.put(msgpack.loads(pong_socket.recv()))
+                    pong_list.append(msgpack.loads(pong_socket.recv()))
 
                 # Store pings.
                 if ping_socket in socks and socks[ping_socket] == zmq.POLLIN:
-                    ping_queue.put(msgpack.loads(ping_socket.recv()))
+                    ping_list.append(msgpack.loads(ping_socket.recv()))
 
         except KeyboardInterrupt:
             pass
 
+        # Close connection.
         ping_socket.close()
         pong_socket.close()
         context.term()
+
+        # Communicate messages.
+        queue.put(ping_list)
+        queue.put(pong_list)
 
     def close(self):
 
         # Stop listening for data.
         self.__run_event.clear()
         self.__event_loop.join()
-        self.__pings.put('END')
-        self.__pongs.put('END')
-        time.sleep(0.1)
+        self.__pings = self.__queue.get()
+        self.__pongs = self.__queue.get()
 
         # Convert ping queue to a list (make stored format identical to other
         # transports). Drop payload.
         pings = list()
-        for ping in iter(self.__pings.get, 'END'):
+        for ping in self.__pings:
             pings.append({'ping_PID': int(ping['ping_PID']),
                           'counter': int(ping['counter']),
                           'ping_time': utc_str_to_datetime(ping['ping_time'])})
@@ -227,7 +235,7 @@ class LogPingPong(object):
         # Convert pong queue to a list (make stored format identical to other
         # transports). Drop payload.
         pongs = list()
-        for pong in iter(self.__pongs.get, 'END'):
+        for pong in self.__pongs:
             pongs.append({'ping_PID': int(pong['ping_PID']),
                           'counter': int(pong['counter']),
                           'pong_PID': int(pong['pong_PID']),
