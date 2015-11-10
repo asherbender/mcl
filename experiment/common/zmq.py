@@ -5,12 +5,12 @@ import Queue
 import msgpack
 import threading
 
+from .common import LOCALHOST
 from .common import print_if
 from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 BASE_PORT = 5550
-LOCALHOST = True
 if LOCALHOST:
     ZMQ_PING = 'tcp://127.0.0.1'
     ZMQ_PONG = 'tcp://127.0.0.2'

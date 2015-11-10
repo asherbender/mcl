@@ -4,6 +4,7 @@ import socket
 import datetime
 
 ISO_FMT = '%Y-%m-%dT%H:%M:%S.%f'
+LOCALHOST = True
 
 
 def get_hostname():

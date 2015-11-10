@@ -6,12 +6,12 @@ import threading
 import multiprocessing
 from amqpstorm import Connection
 
+from .common import LOCALHOST
 from .common import print_if
 from .common import get_utc_string
 from .common import utc_str_to_datetime
 
 PORT = 5672
-LOCALHOST = True
 if LOCALHOST:
     HOSTNAME = 'localhost'
 else:
