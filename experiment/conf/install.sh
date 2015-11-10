@@ -46,11 +46,11 @@ pip install pyzmq
 echo -e '\n\n'
 
 #-------------------------------------------------------------------------------
-# Install RabbitMQ
+# Install AMQP-Storm
 #-------------------------------------------------------------------------------
-echo 'Installing RabbitMQ'
+echo 'Installing AMQP-Storm'
 apt-get install rabbitmq-server
-pip install pika
+pip install amqp-storm
 echo -e '\n\n'
 
 #-------------------------------------------------------------------------------
