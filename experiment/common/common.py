@@ -8,7 +8,12 @@ LOCALHOST = False
 
 
 def get_hostname():
+    """Get the hostname of the current device.
 
+    Returns:
+      str: hostname of device.
+
+    """
     try:
         hostname = socket.gethostname()
     except:
@@ -18,7 +23,15 @@ def get_hostname():
 
 
 def print_if(verbose, string, max_chars):
+    """Conditionally print string to std.out
 
+    Args:
+      verbose (bool): if set to `True` the string will be printed. Otherwise do
+          not print.
+      string (str): string to pring.
+      max_chars (int): maximum number of characters to print.
+
+    """
     if verbose:
         if max_chars is not None:
             print string[:max(0, max_chars - 3)] + '...'
@@ -85,6 +98,13 @@ def make_payload(size):
 
 
 def get_utc_string():
+    """Get current UTC time as an ISO formatted string.
+
+    Returns:
+      str: ISO formatted time.
+
+    """
+
     # Could implement:
     #
     #     datetime.datetime.utcnow().isoformat()
@@ -99,12 +119,37 @@ def get_utc_string():
 
 
 def utc_str_to_datetime(s):
+    """Convert ISO-time string into a datetime.datetime object.
 
+    Args:
+      s (str): ISO formatted time.
+
+    Returns:
+      datetime.datetime: time object.
+
+    """
     return datetime.datetime.strptime(s, ISO_FMT)
 
 
 def create_ping(PID, counter, payload):
+    """Generate a ping dictionary.
 
+    Generate a ping dictionary of the form:
+
+        {'ping_PID': <int>,
+         'counter': <int>,
+         'payload': <str>,
+         'ping_time': <str>}
+
+    Args:
+      PID (int): PID of ping process.
+      counter (int): message counter.
+      payload (str): payload of ping message.
+
+    Returns:
+      dict: Ping dictionary
+
+    """
     return {'ping_PID': PID,
             'counter': counter,
             'payload': payload,
@@ -112,7 +157,24 @@ def create_ping(PID, counter, payload):
 
 
 def create_pong(PID, ping):
+    """Generate a pong dictionary from a ping dictionary.
 
+    Generate a pong dictionary (from a ping dictionary) of the form:
+
+        {'ping_PID': <int>,
+         'counter': <int>,
+         'pong_PID': <int>,
+         'payload': <str>,
+         'pong_time': <str>}
+
+    Args:
+      PID (int): PID of pong process.
+      ping (dict): ping dictionary.
+
+    Returns:
+      dict: Pong dictionary
+
+    """
     return {'ping_PID': ping['ping_PID'],
             'counter': ping['counter'],
             'pong_PID': PID,
@@ -120,7 +182,21 @@ def create_pong(PID, ping):
             'pong_time': get_utc_string()}
 
 
-def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chars):
+def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr):
+    """Standardised function for broadcasting ping messages.
+
+    Args:
+      SendPing (object): Object for sending ping messages.
+      ID (int): ID of this ping thread/process.
+      start_event (multiprocessing.Event): Flag for terminating pings.
+      payload (str): payload to send in ping messages.
+      delay (float): delay between ping messages.
+      transport (str): name of transport.
+      verbose (bool): if set to `True` a message will be printed for each ping
+          transmitted.
+      max_chr (int): maximum number of characters to print to the screen.
+
+    """
 
     # Attempt to set process name.
     PID = os.getpid()
@@ -131,7 +207,7 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_char
     ping = SendPing(ID)
 
     # Wait until start event has been triggered.
-    print_if(verbose, 'PID %4i: starting pings' % PID, max_chars)
+    print_if(verbose, 'PID %4i: starting pings' % PID, max_chr)
     while not start_event.is_set():
         pass
 
@@ -146,7 +222,7 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_char
             if verbose:
                 msg = 'PID %4i (%s): sent ping message %i'
                 msg = msg % (PID, transport, counter)
-                print_if(verbose, msg, max_chars)
+                print_if(verbose, msg, max_chr)
 
             counter += 1
 
@@ -164,10 +240,23 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_char
         print str(e)
 
     ping.close()
-    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chars)
+    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
 
 
-def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chars):
+def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
+    """Standardised function for broadcasting pong messages.
+
+    Args:
+      SendPong (object): Object for sending pong messages.
+      ID (int): ID of this pong thread/process.
+      broadcasters (int): total number of broadcasters in the system.
+      start_event (multiprocessing.Event): Flag for terminating pongs.
+      transport (str): name of transport.
+      verbose (bool): if set to `True` a message will be printed for each pong
+          transmitted.
+      max_chr (int): maximum number of characters to print to the screen.
+
+    """
 
     # Attempt to set process name.
     PID = os.getpid()
@@ -176,8 +265,8 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chars)
 
     # Wait until start event has been triggered.
     msg = 'PID %4i (%s): starting pongs' % (PID, transport)
-    print_if(verbose, msg, max_chars)
-    ponger = SendPong(PID, ID, broadcasters, verbose, max_chars)
+    print_if(verbose, msg, max_chr)
+    ponger = SendPong(PID, ID, broadcasters, verbose, max_chr)
     while not start_event.is_set():
         pass
 
@@ -192,10 +281,21 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chars)
         print str(e)
 
     ponger.close()
-    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chars)
+    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
 
 
 def format_ping_pongs(pings, pongs):
+    """Format a list of pings and a list of pongs into a standard format.
+
+    Args:
+      pings (list): ping dictionaries.
+      pongs (list): pong dictionaries.
+
+    Returns:
+      tuple: (pings, pongs) each list contains pings/pongs ordered by counter
+          (time). The payload is removed from each message.
+
+    """
 
     # Ensure pings are stored in an identical format - drop the payload to save
     # space.
