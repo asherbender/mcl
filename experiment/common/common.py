@@ -176,3 +176,29 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chars)
 
     ponger.close()
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chars)
+
+
+def format_ping_pongs(pings, pongs):
+
+    # Ensure pings are stored in an identical format - drop the payload to save
+    # space.
+    formatted_pings = list()
+    for ping in pings:
+        formatted_pings.append({'ping_PID': int(ping['ping_PID']),
+                                'counter': int(ping['counter']),
+                                'ping_time': utc_str_to_datetime(ping['ping_time'])})
+
+    # Ensure pongs are stored in an identical format - drop the payload to save
+    # space.
+    formatted_pongs = list()
+    for pong in pongs:
+        formatted_pongs.append({'ping_PID': int(pong['ping_PID']),
+                                'counter': int(pong['counter']),
+                                'pong_PID': int(pong['pong_PID']),
+                                'pong_time': utc_str_to_datetime(pong['pong_time'])})
+
+    # Sort ping/pongs in order of counter (time).
+    pings = sorted(formatted_pings, key=lambda ping: ping['counter'])
+    pongs = sorted(formatted_pongs, key=lambda pong: pong['counter'])
+
+    return ping, pong

@@ -1,8 +1,6 @@
 from __future__ import absolute_import
 
 import lcm
-import time
-import Queue
 import select
 import threading
 

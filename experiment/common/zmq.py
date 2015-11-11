@@ -8,7 +8,7 @@ import threading
 from .common import LOCALHOST
 from .common import print_if
 from .common import get_utc_string
-from .common import utc_str_to_datetime
+from .common import format_ping_pongs
 
 BASE_PORT = 5550
 if LOCALHOST:
@@ -224,23 +224,7 @@ class LogPingPong(object):
         self.__pings = self.__queue.get()
         self.__pongs = self.__queue.get()
 
-        # Convert ping queue to a list (make stored format identical to other
-        # transports). Drop payload.
-        pings = list()
-        for ping in self.__pings:
-            pings.append({'ping_PID': int(ping['ping_PID']),
-                          'counter': int(ping['counter']),
-                          'ping_time': utc_str_to_datetime(ping['ping_time'])})
-
-        # Convert pong queue to a list (make stored format identical to other
-        # transports). Drop payload.
-        pongs = list()
-        for pong in self.__pongs:
-            pongs.append({'ping_PID': int(pong['ping_PID']),
-                          'counter': int(pong['counter']),
-                          'pong_PID': int(pong['pong_PID']),
-                          'pong_time': utc_str_to_datetime(pong['pong_time'])})
-
-        # Store lists.
-        self.__pings = sorted(pings, key=lambda ping: ping['counter'])
-        self.__pongs = sorted(pongs, key=lambda pong: pong['counter'])
+        # Ensure ping/pongs are stored in an identical format. Drop the payload
+        # to save space.
+        self.__pings, self.__pongs = format_ping_pongs(self.__pings,
+                                                       self.__pongs)

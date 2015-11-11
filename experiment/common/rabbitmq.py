@@ -9,7 +9,7 @@ from amqpstorm import Connection
 from .common import LOCALHOST
 from .common import print_if
 from .common import get_utc_string
-from .common import utc_str_to_datetime
+from .common import format_ping_pongs
 
 PORT = 5672
 if LOCALHOST:
@@ -73,7 +73,7 @@ class Listener(object):
                                         exchange_type='topic')
 
         # Create queue and bind to exchange.
-        queue = self.__channel.queue.declare(exclusive=True, auto_delete=True)
+        queue = self.__channel.queue.declare(exclusive=True)
         self.__queue = queue['queue']
         self.__channel.queue.bind(exchange=exchange_name,
                                   queue=self.__queue,
@@ -230,25 +230,13 @@ class LogPingPong(object):
         self.__ping_listener.join()
         self.__pong_listener.join()
 
-        # Convert ping queue to a list (make stored format identical to other
-        # transports). Drop payload.
-        pings = list()
-        for ping in self.__pings:
-            ping = msgpack.loads(ping)
-            pings.append({'ping_PID': int(ping['ping_PID']),
-                          'counter': int(ping['counter']),
-                          'ping_time': utc_str_to_datetime(ping['ping_time'])})
+        # RabbitMQ is the only transport that does not de-serialise the
+        # messages during logging. This has been done to try and improve the
+        # poor performance of RabbitMQ.
+        self.__pings = [msgpack.loads(ping) for ping in self.__pings]
+        self.__pongs = [msgpack.loads(pong) for pong in self.__pongs]
 
-        # Convert pong queue to a list (make stored format identical to other
-        # transports). Drop payload.
-        pongs = list()
-        for pong in self.__pongs:
-            pong = msgpack.loads(pong)
-            pongs.append({'ping_PID': int(pong['ping_PID']),
-                          'counter': int(pong['counter']),
-                          'pong_PID': int(pong['pong_PID']),
-                          'pong_time': utc_str_to_datetime(pong['pong_time'])})
-
-        # Store lists.
-        self.__pings = sorted(pings, key=lambda ping: ping['counter'])
-        self.__pongs = sorted(pongs, key=lambda pong: pong['counter'])
+        # Ensure ping/pongs are stored in an identical format. Drop the payload
+        # to save space.
+        self.__pings, self.__pongs = format_ping_pongs(self.__pings,
+                                                       self.__pongs)
