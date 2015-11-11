@@ -103,6 +103,23 @@ def utc_str_to_datetime(s):
     return datetime.datetime.strptime(s, ISO_FMT)
 
 
+def create_ping(PID, counter, payload):
+
+    return {'ping_PID': PID,
+            'counter': counter,
+            'payload': payload,
+            'ping_time': get_utc_string()}
+
+
+def create_pong(PID, ping):
+
+    return {'ping_PID': ping['ping_PID'],
+            'counter': ping['counter'],
+            'pong_PID': PID,
+            'payload': ping['payload'],
+            'pong_time': get_utc_string()}
+
+
 def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chars):
 
     # Attempt to set process name.

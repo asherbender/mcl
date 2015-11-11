@@ -8,7 +8,8 @@ from amqpstorm import Connection
 
 from .common import LOCALHOST
 from .common import print_if
-from .common import get_utc_string
+from .common import create_ping
+from .common import create_pong
 from .common import format_ping_pongs
 
 PORT = 5672
@@ -116,13 +117,9 @@ class SendPing(object):
 
     def publish(self, PID, counter, payload):
 
-        # Create message
-        message = {'ping_PID': PID,
-                   'counter': counter,
-                   'payload': payload,
-                   'ping_time': get_utc_string()}
-
-        self.__publisher.publish(msgpack.dumps(message), 'ping')
+        # Publish 'ping' message.
+        ping = create_ping(PID, counter, payload)
+        self.__publisher.publish(msgpack.dumps(ping), 'ping')
 
     def close(self):
         self.__publisher.close()
@@ -139,13 +136,9 @@ class SendPong(object):
 
         def callback(payload):
 
+            # Publish 'pong' message.
             ping = msgpack.loads(payload)
-            pong = {'ping_PID': ping['ping_PID'],
-                    'counter': ping['counter'],
-                    'pong_PID': PID,
-                    'payload': ping['payload'],
-                    'pong_time': get_utc_string()}
-
+            pong = create_pong(PID, ping)
             self.__publisher.publish(msgpack.dumps(pong), 'pong')
 
             if verbose:

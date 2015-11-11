@@ -7,14 +7,14 @@
 TIME=10
 
 clear
-for PACKET in '1000' '2000' '4000'
+for PACKET in '1000'             #'2000' '4000'
 do
     DIR=./data/localhost/${PACKET}
     mkdir -p ${DIR}
 
-    for TRANSPORT in 'lcm' 'mcl' 'ros' 'zmq' 'rabbitmq'
+    for TRANSPORT in 'rabbitmq'  #'lcm' 'mcl' 'ros' 'zmq' 
     do
-        for LISTENERS in '1' '2' '4'
+        for LISTENERS in '4'     #'1' '2' '4'
         do
             for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
             do

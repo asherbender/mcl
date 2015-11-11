@@ -7,7 +7,8 @@ import msgpack
 import threading
 
 from .common import print_if
-from .common import get_utc_string
+from .common import create_ping
+from .common import create_pong
 from .common import format_ping_pongs
 
 PING_GROUP = 'ping'
@@ -25,14 +26,9 @@ class SendPing(object):
 
     def publish(self, PID, counter, payload):
 
-        # Create message
-        message = {'ping_PID': PID,
-                   'counter': counter,
-                   'payload': payload,
-                   'ping_time': get_utc_string()}
-
-        # Publish data.
-        self.__node.shout(PING_GROUP, msgpack.dumps(message))
+        # Publish 'ping' message.
+        ping = create_ping(PID, counter, payload)
+        self.__node.shout(PING_GROUP, msgpack.dumps(ping))
 
     def close(self):
 
@@ -78,14 +74,10 @@ class SendPong(object):
                     payload = ping_node.recv()
                     if payload[0] == 'SHOUT':
 
+                        # Publish 'pong' message.
                         ping = msgpack.loads(payload[-1])
-                        pong = {'ping_PID': ping['ping_PID'],
-                                'counter': ping['counter'],
-                                'pong_PID': PID,
-                                'payload': ping['payload'],
-                                'pong_time': get_utc_string()}
-
-                        pong_node.shout(PONG_GROUPmsgpack.dumps(pong))
+                        pong = create_pong(PID, ping)
+                        pong_node.shout(PONG_GROUP, msgpack.dumps(pong))
 
                         if verbose:
                             s = 'PID %4i (pyre): sent pong message %i'

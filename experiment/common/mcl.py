@@ -7,7 +7,8 @@ from mcl.network.udp import RawListener
 from mcl.network.udp import RawBroadcaster
 
 from .common import print_if
-from .common import get_utc_string
+from .common import create_ping
+from .common import create_pong
 from .common import format_ping_pongs
 
 ping_URL = 'ff15::c75d:ce41:ea8e:000a'
@@ -22,14 +23,9 @@ class SendPing(object):
 
     def publish(self, PID, counter, payload):
 
-        # Create message
-        message = {'ping_PID': PID,
-                   'counter': counter,
-                   'payload': payload,
-                   'ping_time': get_utc_string()}
-
-        # Publish message.
-        self.__broadcaster.publish(msgpack.dumps(message))
+        # Publish 'ping' message.
+        ping = create_ping(PID, counter, payload)
+        self.__broadcaster.publish(msgpack.dumps(ping))
 
     def close(self):
 
@@ -48,13 +44,9 @@ class SendPong(object):
         def callback(data):
             """Repack PingMessage() data as a PongMessage()."""
 
+            # Publish 'pong' message.
             ping = msgpack.loads(data['payload'])
-            pong = {'ping_PID': ping['ping_PID'],
-                    'counter': ping['counter'],
-                    'pong_PID': PID,
-                    'payload': ping['payload'],
-                    'pong_time': get_utc_string()}
-
+            pong = create_pong(PID, ping)
             self.__broadcaster.publish(msgpack.dumps(pong))
 
             if verbose:

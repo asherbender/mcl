@@ -7,7 +7,8 @@ import multiprocessing
 from std_msgs.msg import String
 
 from .common import print_if
-from .common import get_utc_string
+from .common import create_ping
+from .common import create_pong
 from .common import format_ping_pongs
 
 
@@ -21,15 +22,10 @@ class SendPing(object):
 
     def publish(self, PID, counter, payload):
 
-        # Create message
-        message = {'ping_PID': PID,
-                   'counter': counter,
-                   'payload': payload,
-                   'ping_time': get_utc_string()}
-
-        # Publish message.
+        # Publish 'ping' message.
         try:
-            self.__publisher.publish(msgpack.dumps(message))
+            ping = create_ping(PID, counter, payload)
+            self.__publisher.publish(msgpack.dumps(ping))
         except rospy.ROSException:
             pass
 
@@ -48,14 +44,10 @@ class SendPong(object):
         def callback(data):
             """Repack Ping data as a Pong."""
 
-            ping = msgpack.loads(data.data)
-            pong = {'ping_PID': ping['ping_PID'],
-                    'counter': ping['counter'],
-                    'pong_PID': PID,
-                    'payload': ping['payload'],
-                    'pong_time': get_utc_string()}
-
+            # Publish 'pong' message.
             try:
+                ping = msgpack.loads(data.data)
+                pong = create_pong(PID, ping)
                 self.__broadcaster.publish(msgpack.dumps(pong))
             except rospy.ROSException:
                 pass
