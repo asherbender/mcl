@@ -225,10 +225,10 @@ class LogPingPong(object):
 
         # Stop listening for data.
         self.__run_event.clear()
-        # self.__ping_listener.join()
-        # self.__pong_listener.join()
         self.__pings = self.__pings.get()
         self.__pongs = self.__pongs.get()
+        self.__ping_listener.join()
+        self.__pong_listener.join()
 
         # Convert ping queue to a list (make stored format identical to other
         # transports). Drop payload.

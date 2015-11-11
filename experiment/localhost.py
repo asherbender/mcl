@@ -115,8 +115,6 @@ if __name__ == '__main__':
         ponger.daemon = False
         ponger.start()
 
-        time.sleep(0.1)
-
     # Synchronise pong services.
     print 'Starting pongs...'
     pong_start_event.set()

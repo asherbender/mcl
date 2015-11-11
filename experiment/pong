@@ -46,7 +46,7 @@ if __name__ == '__main__':
     msg = 'Time to send pongs.'
     parser.add_argument('--time', type=float, help=msg, default=None)
 
-    choices = ['lcm', 'mcl', 'ros', 'zmq', 'rabbitmq']
+    choices = ['lcm', 'mcl', 'pyre', 'rabbitmq', 'ros', 'zmq']
     msg = "Underlying transport to use during test. Choose from '%r'."
     parser.add_argument('--transport', choices=choices, default='mcl')
 
@@ -65,12 +65,15 @@ if __name__ == '__main__':
         from common.lcm import SendPong
     elif args.transport == 'mcl':
         from common.mcl import SendPong
+    elif args.transport == 'pyre':
+        from common.pyre import SendPong
+    elif args.transport == 'rabbitmq':
+        from common.rabbitmq import SendPong
     elif args.transport == 'ros':
         from common.ros import SendPong
     elif args.transport == 'zmq':
         from common.zmq import SendPong
-    elif args.transport == 'rabbitmq':
-        from common.rabbitmq import SendPong
+
 
     # -------------------------------------------------------------------------
     #                         Receive PongMessage()
