@@ -45,7 +45,7 @@ if __name__ == '__main__':
     msg = 'Data rate in MB/s.'
     parser.add_argument('--rate', type=float, help=msg, default=5)
 
-    choices = ['lcm', 'mcl', 'ros', 'zmq', 'rabbitmq']
+    choices = ['lcm', 'mcl', 'pyre', 'rabbitmq', 'ros', 'zmq']
     msg = "Underlying transport to use during test. Choose from '%r'."
     parser.add_argument('--transport', choices=choices, default='mcl')
 
@@ -67,12 +67,14 @@ if __name__ == '__main__':
         import common.lcm as transport
     elif args.transport == 'mcl':
         import common.mcl as transport
+    elif args.transport == 'pyre':
+        import common.pyre as transport
+    elif args.transport == 'rabbitmq':
+        import common.rabbitmq as transport
     elif args.transport == 'ros':
         import common.ros as transport
     elif args.transport == 'zmq':
         import common.zmq as transport
-    elif args.transport == 'rabbitmq':
-        import common.rabbitmq as transport
 
     # -------------------------------------------------------------------------
     #                             Start logging

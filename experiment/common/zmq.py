@@ -89,10 +89,9 @@ class SendPong(object):
         # Create object for retrieving messages.
         poller = zmq.Poller()
         poller.register(ping_socket, zmq.POLLIN)
-
         try:
             while run_event.is_set():
-                socks = dict(poller.poll(timeout=1))
+                socks = dict(poller.poll(timeout=100))
                 if ping_socket in socks and socks[ping_socket] == zmq.POLLIN:
                     payload = ping_socket.recv()
 
@@ -188,7 +187,7 @@ class LogPingPong(object):
 
         try:
             while run_event.is_set():
-                socks = dict(poller.poll(timeout=1))
+                socks = dict(poller.poll(timeout=100))
 
                 # Store pongs.
                 if pong_socket in socks and socks[pong_socket] == zmq.POLLIN:

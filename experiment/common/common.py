@@ -318,4 +318,4 @@ def format_ping_pongs(pings, pongs):
     pings = sorted(formatted_pings, key=lambda ping: ping['counter'])
     pongs = sorted(formatted_pongs, key=lambda pong: pong['counter'])
 
-    return ping, pong
+    return pings, pongs
