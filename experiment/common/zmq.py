@@ -63,12 +63,12 @@ class SendPong(object):
         self.__run_event.set()
 
         # Create thread for handling event loop.
-        self.__event_loop = threading.Thread(target=self.__event_loop,
-                                             args=(self.__run_event, PID, ID,
-                                                   broadcasters,
-                                                   verbose, max_chars))
-        self.__event_loop.daemon = True
-        self.__event_loop.start()
+        self.__thread = threading.Thread(target=self.__event_loop,
+                                         args=(self.__run_event, PID, ID,
+                                               broadcasters,
+                                               verbose, max_chars))
+        self.__thread.daemon = True
+        self.__thread.start()
 
     @staticmethod
     def __event_loop(run_event, PID, ID, broadcasters, verbose, max_chars):
@@ -116,7 +116,7 @@ class SendPong(object):
     def close(self):
 
         self.__run_event.clear()
-        self.__event_loop.join()
+        self.__thread.join()
 
 
 class LogPingPong(object):
@@ -147,14 +147,14 @@ class LogPingPong(object):
         self.__run_event.set()
 
         # Create thread for logging pings and pongs.
-        self.__event_loop = threading.Thread(target=self.__event_loop,
-                                             args=(self.__run_event,
-                                                   broadcasters,
-                                                   listeners,
-                                                   self.__queue))
+        self.__thread = threading.Thread(target=self.__event_loop,
+                                         args=(self.__run_event,
+                                               broadcasters,
+                                               listeners,
+                                               self.__queue))
 
-        self.__event_loop.daemon = True
-        self.__event_loop.start()
+        self.__thread.daemon = True
+        self.__thread.start()
 
     @staticmethod
     def __event_loop(run_event, broadcasters, listeners, queue):
@@ -214,7 +214,7 @@ class LogPingPong(object):
 
         # Stop listening for data.
         self.__run_event.clear()
-        self.__event_loop.join()
+        self.__thread.join()
         self.__pings = self.__queue.get()
         self.__pongs = self.__queue.get()
 
