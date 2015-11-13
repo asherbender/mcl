@@ -1,10 +1,11 @@
 import os
 import time
 import socket
-import datetime
+import numpy as np
+from collections import OrderedDict
 
 ISO_FMT = '%Y-%m-%dT%H:%M:%S.%f'
-LOCALHOST = False
+LOCALHOST = True
 
 
 def get_hostname():
@@ -53,11 +54,8 @@ def set_process_name(name):
 
     # Set the name of a new process if 'setproctitle' exists.
     try:
-        from setproctitle import getproctitle as getproctitle
         from setproctitle import setproctitle as setproctitle
-
-        current_name = getproctitle()
-        name = current_name + ' -> ' + name
+        name = '/usr/bin/python ' + name
         setproctitle(name)
 
     # If 'setproctitle' does not exist. Do nothing.
@@ -97,40 +95,6 @@ def make_payload(size):
     return payload[:size]
 
 
-def get_utc_string():
-    """Get current UTC time as an ISO formatted string.
-
-    Returns:
-      str: ISO formatted time.
-
-    """
-
-    # Could implement:
-    #
-    #     datetime.datetime.utcnow().isoformat()
-    #
-    # Note that isoformat return a string representing the date and time in ISO
-    # 8601 format, YYYY-MM-DDTHH:MM:SS.mmmmmm or, if microsecond is 0,
-    # YYYY-MM-DDTHH:MM:SS.
-    #
-    # To avoid this conditional behaviour ALWAY include microseconds:
-    #
-    return datetime.datetime.utcnow().strftime(ISO_FMT)
-
-
-def utc_str_to_datetime(s):
-    """Convert ISO-time string into a datetime.datetime object.
-
-    Args:
-      s (str): ISO formatted time.
-
-    Returns:
-      datetime.datetime: time object.
-
-    """
-    return datetime.datetime.strptime(s, ISO_FMT)
-
-
 def create_ping(PID, counter, payload):
     """Generate a ping dictionary.
 
@@ -153,7 +117,7 @@ def create_ping(PID, counter, payload):
     return {'ping_PID': PID,
             'counter': counter,
             'payload': payload,
-            'ping_time': get_utc_string()}
+            'ping_time': time.time()}
 
 
 def create_pong(PID, ping):
@@ -179,7 +143,7 @@ def create_pong(PID, ping):
             'counter': ping['counter'],
             'pong_PID': PID,
             'payload': ping['payload'],
-            'pong_time': get_utc_string()}
+            'pong_time': time.time()}
 
 
 def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr):
@@ -200,10 +164,10 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
 
     # Attempt to set process name.
     PID = os.getpid()
-    proc_name = 'pinger %i (%s)' % (PID, transport)
+    proc_name = 'pinger (%s, %i): ID %i' % (transport, PID, ID)
     set_process_name(proc_name)
 
-    # Create message broadcaster for PingMessage().
+    # Create message broadcaster for ping messages.
     ping = SendPing(ID)
 
     # Wait until start event has been triggered.
@@ -215,7 +179,7 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
     try:
         counter = 0
         while start_event.is_set():
-            time_before = datetime.datetime.utcnow()
+            time_before = time.time()
 
             ping.publish(PID, counter, payload)
 
@@ -228,16 +192,16 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
 
             # Sleep for requested length of time. Attempt to correct for the
             # length of time required to construct and send the message.
-            time_after = datetime.datetime.utcnow()
-            elapsed_time = (time_after - time_before).total_seconds()
-            sleep_time = max(0, delay - elapsed_time)
-            time.sleep(sleep_time)
+            while (time.time() - time_before) < delay:
+                pass
 
     # Terminate thread on keyboard cancel.
     except KeyboardInterrupt:
         pass
     except Exception as e:
         print str(e)
+
+    print counter
 
     ping.close()
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
@@ -260,21 +224,22 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
 
     # Attempt to set process name.
     PID = os.getpid()
-    proc_name = 'pinger %i (%s)' % (PID, transport)
+    proc_name = 'ponger (%s, %i): ID %i' % (transport, PID, ID)
     set_process_name(proc_name)
+
+    # Create message broadcaster for pong messages.
+    ponger = SendPong(PID, ID, broadcasters, verbose, max_chr)
 
     # Wait until start event has been triggered.
     msg = 'PID %4i (%s): starting pongs' % (PID, transport)
     print_if(verbose, msg, max_chr)
-    ponger = SendPong(PID, ID, broadcasters, verbose, max_chr)
     while not start_event.is_set():
         pass
 
+    # Wait for kill signal.
     try:
         while start_event.is_set():
             time.sleep(0.1)
-
-    # Terminate thread on keyboard cancel.
     except KeyboardInterrupt:
         pass
     except Exception as e:
@@ -282,6 +247,32 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
 
     ponger.close()
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
+
+
+def log_ping_pong(LogPingPong, run_event, queue, transport, pingers, pongers):
+
+    # Attempt to set process name.
+    PID = os.getpid()
+    proc_name = 'logger (%s, %i): %i pingers, %i pongers'
+    proc_name = proc_name % (transport, PID, pingers, pongers)
+    set_process_name(proc_name)
+
+    # Create logger.
+    logger = LogPingPong(pingers, pongers)
+
+    # Wait for kill signal.
+    try:
+        while run_event.is_set():
+            time.sleep(0.1)
+
+    # Terminate thread on keyboard cancel.
+    except KeyboardInterrupt:
+        pass
+
+    # Stop logging pings and pongs.
+    logger.close()
+    queue.put(logger.pings)
+    queue.put(logger.pongs)
 
 
 def format_ping_pongs(pings, pongs):
@@ -303,7 +294,7 @@ def format_ping_pongs(pings, pongs):
     for ping in pings:
         formatted_pings.append({'ping_PID': int(ping['ping_PID']),
                                 'counter': int(ping['counter']),
-                                'ping_time': utc_str_to_datetime(ping['ping_time'])})
+                                'ping_time': float(ping['ping_time'])})
 
     # Ensure pongs are stored in an identical format - drop the payload to save
     # space.
@@ -312,10 +303,214 @@ def format_ping_pongs(pings, pongs):
         formatted_pongs.append({'ping_PID': int(pong['ping_PID']),
                                 'counter': int(pong['counter']),
                                 'pong_PID': int(pong['pong_PID']),
-                                'pong_time': utc_str_to_datetime(pong['pong_time'])})
+                                'pong_time': float(pong['pong_time'])})
 
     # Sort ping/pongs in order of counter (time).
     pings = sorted(formatted_pings, key=lambda ping: ping['counter'])
     pongs = sorted(formatted_pongs, key=lambda pong: pong['counter'])
 
     return pings, pongs
+
+
+def pings_to_dict(pings):
+    """Convert list of ping data into an ordered dictionary
+
+    Convert list of ping dictionaries:
+
+       [{'counter': <int>, 'ping_time': <datetime.datetime>, 'ping_PID': <int>},
+        ...,
+        {'counter': <int>, 'ping_time': <datetime.datetime>, 'ping_PID': <int>}]
+
+    into an ordered dictionary.
+
+       ping_data[ping_PID][counter] = <datetime.datetime>
+
+    Args:
+      pings (list): ping dictionaries.
+
+    Returns:
+      OrderedDict: ping data
+
+    """
+
+    ping_data = dict()
+    for ping in pings:
+        if ping['ping_PID'] not in ping_data:
+            ping_data[ping['ping_PID']] = dict()
+
+        ping_data[ping['ping_PID']][ping['counter']] = ping['ping_time']
+
+    # Order pings by counter.
+    for key, value in ping_data.iteritems():
+        value = sorted(value.iteritems(), key=lambda item: item[0])
+        ping_data[key] = OrderedDict(value)
+
+    # Order ping services by PID.
+    ping_data = sorted(ping_data.iteritems(), key=lambda item: item[0])
+    return OrderedDict(ping_data)
+
+
+def pongs_to_dict(pongs):
+    """Convert list of pong data into an ordered dictionary
+
+    Convert list of pong dictionaries:
+
+       [{'pong_PID': <int>, 'counter': <int>, 'ping_PID': <int>, 'pong_time': <datetime.datetime>},
+        ...,
+        {'pong_PID': <int>, 'counter': <int>, 'ping_PID': <int>, 'pong_time': <datetime.datetime>}]
+
+    into an ordered dictionary.
+
+       pong_data[ping_PID][pong_PID][counter] = <datetime.datetime>
+
+    Args:
+      pings (list): pong dictionaries.
+
+    Returns:
+      OrderedDict: pong data
+
+    """
+
+    pong_data = dict()
+    for pong in pongs:
+        ping_PID = pong['ping_PID']
+        pong_PID = pong['pong_PID']
+
+        if ping_PID not in pong_data:
+            pong_data[ping_PID] = dict()
+
+        if pong_PID not in pong_data[ping_PID]:
+            pong_data[ping_PID][pong_PID] = dict()
+
+        pong_data[ping_PID][pong_PID][pong['counter']] = pong['pong_time']
+
+    # Order pongs by counter.
+    for ping_PID in pong_data.iterkeys():
+        for pong_PID in pong_data[ping_PID].iterkeys():
+            data = pong_data[ping_PID][pong_PID].iteritems()
+            data = sorted(data, key=lambda item: item[0])
+            pong_data[ping_PID][pong_PID] = OrderedDict(data)
+
+    # Order pongs services by PID.
+    for pong_PID, value in pong_data.iteritems():
+        data = sorted(value.iteritems(), key=lambda item: item[0])
+        pong_data[pong_PID] = OrderedDict(data)
+
+    # Order ping services by PID.
+    data = sorted(pong_data.iteritems(), key=lambda item: item[0])
+    return OrderedDict(data)
+
+
+def message_stats(payload, data):
+    """Calculate statistics in ping/pong data.
+
+    Calculate statistics for ping/pong data in the form:
+
+        stats[PID] = {'number_messages': <int>,
+                      'data_transfered': <int>,
+                      'duration': <float>,
+                      'data_rate': <float>}
+
+    where:
+        - `number_messages` are the number of ping/pong messages that were
+          transferred.
+        - `data_transfered` is the total number of ping/pong payload bytes
+          transferred.
+        - `duration` time between first and last ping/pong message in seconds.
+        - `data_rate` bandwidth of ping/pong messages in MB/s
+
+    Args:
+      payload (int): size of payload.
+      data (OrderedDict): ping/pong data.
+
+    Returns:
+      dict: summary of ping data
+
+    """
+
+    stats = dict()
+    for ping_PID, counter_timestamp in data.iteritems():
+
+        # Calculate amount of data transfered in Mb.
+        number_messages = len(counter_timestamp)
+        data_transfered = float(payload) * number_messages / 1000000.0
+
+        # Calculate duration of transitions.
+        duration = data[ping_PID].values()[-1] - data[ping_PID].values()[0]
+
+        # Data transfered in Mb/s
+        data_rate = data_transfered / duration
+
+        stats[ping_PID] = {'number_messages': number_messages,
+                           'data_transfered': data_transfered,
+                           'duration': duration,
+                           'data_rate': data_rate}
+
+    return stats
+
+
+def network_stats(ping_data, pong_data):
+    """Calculate statistics in pong data.
+
+    Calculate statistics for ping data in the form:
+
+        stats[ping_PID][pong_PID] = {'number_messages': <int>,
+                                     'data_transfered': <int>,
+                                     'duration': <float>,
+                                     'data_rate': <float>,
+                                     'latency': <float>,
+                                     'dropped': <int>}
+
+    where:
+        - `number_messages` are the number of pong messages that were
+          transferred.
+        - `data_transfered` is the total number of pong payload bytes
+          transferred.
+        - `duration` time between first and last pong message in seconds.
+        - `data_rate` bandwidth of pong messages in MB/s
+
+    Args:
+      payload (int): size of payload.
+      ping_data (OrderedDict): ping data.
+      pong_data (OrderedDict): pong data.
+
+    Returns:
+      dict: summary of pong data
+
+    """
+
+    # Ensure all ping processes are present in the pong data.
+    mg = 'Ping PIDs not equal: %r != %r' % (ping_data.keys(), pong_data.keys())
+    assert ping_data.keys() == pong_data.keys(), mg
+
+    total_latency = list()
+    total_dropped = list()
+
+    # Iterate through ping processes.
+    for ping_PID in ping_data.iterkeys():
+        pingcounters = set(ping_data[ping_PID].keys())
+
+        # Iterate through pong processes.
+        for pong_PID in pong_data[ping_PID].iterkeys():
+
+            # Create set of counters from ping and pongs.
+            counters = pingcounters | set(pong_data[ping_PID][pong_PID].keys())
+
+            dropped = 0
+            latency = list()
+            for counter in counters:
+                if ((counter in ping_data[ping_PID]) and
+                    (counter in pong_data[ping_PID][pong_PID])):
+                    ping_time = ping_data[ping_PID][counter]
+                    pong_time = pong_data[ping_PID][pong_PID][counter]
+                    latency.append(pong_time - ping_time)
+                else:
+                    dropped += 1
+
+            latency = np.array(latency)
+            latency = latency.mean()
+            total_latency.append(latency)
+            total_dropped.append(dropped)
+
+    return {'latency': float(np.array(total_latency).mean()),
+            'dropped': float(np.array(total_dropped).mean())}

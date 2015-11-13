@@ -1,12 +1,11 @@
 from __future__ import absolute_import
 
 import lcm
+import time
 import select
 import threading
 
 from .common import print_if
-from .common import get_utc_string
-from .common import utc_str_to_datetime
 from .lcm_msgs import PingMessage_t
 from .lcm_msgs import PongMessage_t
 
@@ -26,7 +25,7 @@ class SendPing(object):
         ping.ping_PID = PID
         ping.counter = counter
         ping.payload = payload
-        ping.ping_time = get_utc_string()
+        ping.ping_time = time.time()
 
         # Publish message.
         self.__lc.publish(PING_CHANNEL, ping.encode())
@@ -50,7 +49,7 @@ class SendPong(object):
             pong.counter = ping.counter
             pong.pong_PID = PID
             pong.payload = ping.payload
-            pong.pong_time = get_utc_string()
+            pong.pong_time = time.time()
 
             self.__lc.publish(PONG_CHANNEL, pong.encode())
 
@@ -156,7 +155,7 @@ class LogPingPong(object):
         for item in self.__pings:
             pings.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
-                          'ping_time': utc_str_to_datetime(item.ping_time)})
+                          'ping_time': float(item.ping_time)})
 
         # Convert pong queue to a list (make stored format identical to other
         # transports). Drop payload.
@@ -165,7 +164,7 @@ class LogPingPong(object):
             pongs.append({'ping_PID': int(item.ping_PID),
                           'counter': int(item.counter),
                           'pong_PID': int(item.pong_PID),
-                          'pong_time': utc_str_to_datetime(item.pong_time)})
+                          'pong_time': float(item.pong_time)})
 
         # Store lists.
         self.__pings = sorted(pings, key=lambda ping: ping['counter'])

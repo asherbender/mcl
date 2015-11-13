@@ -1,35 +1,61 @@
 #!/bin/bash
+clear
 
-# A data collection time of 10 seconds will result in a 3hr experiment:
-#
-#     3x5x3x17x(10+5)/(60x60) = 3.1875
-#
 TIME=10
 
-clear
-for PACKET in '1000'             #'2000' '4000'
+# A data collection time of 10 seconds will result in:
+#
+#     1x5x3x16x10/(60x60) = 0.666 hrs
+#
+PACKET=1000
+DIR=./data/localhost/${PACKET}
+mkdir -p ${DIR}
+for TRANSPORT in 'lcm' 'mcl' 'rabbitmq' 'ros' 'zmq'
 do
-    DIR=./data/localhost/${PACKET}
-    mkdir -p ${DIR}
-
-    for TRANSPORT in 'rabbitmq'  #'lcm' 'mcl' 'ros' 'zmq' 
+    for LISTENERS in '1' '3' '6'
     do
-        for LISTENERS in '4'     #'1' '2' '4'
+        for RATE in '0.01' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
         do
-            for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
-            do
-                FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
-                echo $TRANSPORT $PACKET $LISTENERS $RATE
+            FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
+            echo $TRANSPORT $PACKET $LISTENERS $RATE
 
-                ./localhost.py $FNAME                    \
-                               --listeners $LISTENERS    \
-                               --packet $PACKET          \
-                               --rate $RATE              \
-                               --transport $TRANSPORT    \
-                               --time $TIME
+            ./localhost.py $FNAME                    \
+                           --listeners $LISTENERS    \
+                           --packet $PACKET          \
+                           --rate $RATE              \
+                           --transport $TRANSPORT    \
+                           --time $TIME
 
-                echo ''
-            done
+            echo ''
+        done
+    done
+done
+
+
+# A data collection time of 10 seconds will result in:
+#
+#     1x5x4x16x10/(60x60) = 0.888 hrs
+#
+LISTENERS=3
+for TRANSPORT in 'lcm' 'mcl' 'rabbitmq' 'ros' 'zmq'
+do
+    for PACKET in '500' '1500' '3000' '6000'
+    do
+        DIR=./data/localhost/${PACKET}
+        mkdir -p ${DIR}
+        for RATE in '0.01' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
+        do
+            FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
+            echo $TRANSPORT $PACKET $LISTENERS $RATE
+
+            ./localhost.py $FNAME                    \
+                           --listeners $LISTENERS    \
+                           --packet $PACKET          \
+                           --rate $RATE              \
+                           --transport $TRANSPORT    \
+                           --time $TIME
+
+            echo ''
         done
     done
 done

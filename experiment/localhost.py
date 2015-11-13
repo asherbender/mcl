@@ -9,7 +9,6 @@
 import time
 import pickle
 import argparse
-import datetime
 import textwrap
 import multiprocessing
 from bz2 import BZ2File
@@ -18,6 +17,9 @@ from collections import OrderedDict
 from common.common import ping
 from common.common import pong
 from common.common import make_payload
+from common.common import log_ping_pong
+from common.common import pings_to_dict
+from common.common import pongs_to_dict
 
 
 if __name__ == '__main__':
@@ -88,21 +90,32 @@ if __name__ == '__main__':
     payload = make_payload(args.packet)
 
     # Create event for controlling execution of processes.
-    ping_start_event = multiprocessing.Event()
+    logger_queue = multiprocessing.Queue()
+    logger_run_event = multiprocessing.Event()
     pong_start_event = multiprocessing.Event()
+    ping_start_event = multiprocessing.Event()
     ping_start_event.clear()
     pong_start_event.clear()
+    logger_run_event.set()
 
-    # Start logging pings and pongs.
-    print 'Logging messages...'
-    logger = transport.LogPingPong(1, args.listeners)
+    # -------------------------------------------------------------------------
+    #                      Log ping and pong messages
+    # -------------------------------------------------------------------------
+    logger = multiprocessing.Process(target=log_ping_pong,
+                                     args=(transport.LogPingPong,
+                                           logger_run_event,
+                                           logger_queue,
+                                           args.transport,
+                                           1, args.listeners))
+
+    # Start the logging process.
+    logger.daemon = False
+    logger.start()
     time.sleep(0.1)
 
     # -------------------------------------------------------------------------
     #                        Broadcast PongMessage()
     # -------------------------------------------------------------------------
-
-    # Create process for broadcasting PongMessages()
     pongers = list()
     for i in range(args.listeners):
         ponger = multiprocessing.Process(target=pong,
@@ -148,14 +161,13 @@ if __name__ == '__main__':
     # -------------------------------------------------------------------------
 
     # Wait for the user to terminate the process or timeout.
-    start_time = datetime.datetime.utcnow()
+    start_time = time.time()
     while True:
         try:
             time.sleep(0.1)
 
             if (args.time is not None):
-                elapsed_time = datetime.datetime.utcnow() - start_time
-                if elapsed_time.total_seconds() > args.time:
+                if time.time() - start_time > args.time:
                     break
 
         except KeyboardInterrupt:
@@ -164,29 +176,32 @@ if __name__ == '__main__':
     # -------------------------------------------------------------------------
     #                           Shutdown services
     # -------------------------------------------------------------------------
+    logger_run_event.clear()
+    ping_start_event.clear()
+    pong_start_event.clear()
 
     # Shutdown pinger.
-    ping_start_event.clear()
     pinger.join()
     print 'Pings stopped.'
 
     # Shutdown pongers.
-    pong_start_event.clear()
     for ponger in pongers:
         ponger.join()
     print 'Pongs stopped.'
 
-    # Stop logging pings and pongs.
-    logger.close()
-    print 'Stopped logging messages'
-
     # The payload is replicated across all messages. Duplicating the payload
     # does not aid analysis. To save significant space, the payload is removed
     # from the messages.
-    data = OrderedDict()
-    data['pings'] = logger.pings
-    data['pongs'] = logger.pongs
+    data = dict()
+    pings = logger_queue.get()
+    pongs = logger_queue.get()
+    data['pings'] = pings_to_dict(pings)
+    data['pongs'] = pongs_to_dict(pongs)
+    logger.join()
+    print 'Stopped logging messages'
 
     # Write data to file.
     with BZ2File(args.fname, 'w') as f:
         pickle.dump(data, f, protocol=2)
+
+    print 'Pings sent %i. Pongs received %i.' % (len(pings), len(pongs))
