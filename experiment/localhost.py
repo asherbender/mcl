@@ -6,6 +6,7 @@
 
 """
 
+import os
 import time
 import pickle
 import argparse
@@ -34,8 +35,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=formatter_class,
                                      description=textwrap.dedent(man))
 
-    msg = 'Path to log data.'
-    parser.add_argument('fname', help=msg)
+    msg = 'Directory to log data.'
+    parser.add_argument('output', help=msg)
 
     msg = 'Number of listeners to launch.'
     parser.add_argument('--listeners', type=int, help=msg, default=1)
@@ -77,6 +78,7 @@ if __name__ == '__main__':
     # -------------------------------------------------------------------------
     #                             Start logging
     # -------------------------------------------------------------------------
+    print args.transport, args.packet, args.listeners, args.rate
 
     # Calculate delay based on packet size and data rate.
     msg_per_second = 1000000.0 * args.rate / float(args.packet)
@@ -187,23 +189,36 @@ if __name__ == '__main__':
     for i, ponger in enumerate(pongers):
         pong_messages[i] = pong_messages[i].get()
         ponger.join()
-    pong_messages = sum([len(lst) for lst in pong_messages])
+    pong_messages = sum([lst for lst in pong_messages], [])
     print 'Pongs stopped.'
 
     # The payload is replicated across all messages. Duplicating the payload
     # does not aid analysis. To save significant space, the payload is removed
     # from the messages.
-    data = dict()
     pings = logger_queue.get()
     pongs = logger_queue.get()
-    data['pings'] = pings_to_dict(pings)
-    data['pongs'] = pongs_to_dict(pongs)
     logger.join()
     print 'Stopped logging messages'
 
-    # Write data to file.
-    with BZ2File(args.fname, 'w') as f:
+    # Create name of file.
+    fname = '%s_%i_%i_%1.3f.pkl' % (args.transport,
+                                    args.packet,
+                                    args.listeners,
+                                    args.rate)
+
+    # Write logged data to file.
+    data = dict()
+    data['pings'] = pings_to_dict(pings)
+    data['pongs'] = pongs_to_dict(pongs)
+    with BZ2File(os.path.join(args.output, fname), 'w') as f:
+        pickle.dump(data, f, protocol=2)
+
+    # Write process data to file.
+    data = dict()
+    data['pings'] = pings_to_dict(ping_messages)
+    data['pongs'] = pongs_to_dict(pong_messages)
+    with BZ2File(os.path.join(args.output, 'process', fname), 'w') as f:
         pickle.dump(data, f, protocol=2)
 
     print 'Pings sent %i. Pings logged %i.' % (len(ping_messages), len(pings))
-    print 'Pongs sent %i. Pongs logged %i.' % (pong_messages, len(pongs))
+    print 'Pongs sent %i. Pongs logged %i.' % (len(pong_messages), len(pongs))

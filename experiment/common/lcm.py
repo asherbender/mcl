@@ -37,8 +37,16 @@ class SendPing(object):
         self.__lc.publish(PING_CHANNEL, ping.encode())
         self.__messages.append(ping)
 
+    def __ping_to_dct(self, msg):
+
+        return {'ping_PID': int(msg.ping_PID),
+                'counter': int(msg.counter),
+                'payload': str(msg.payload),
+                'ping_time': float(msg.ping_time)}
+
     def close(self):
-        pass
+
+        self.__messages = [self.__ping_to_dct(msg) for msg in self.__messages]
 
 
 class SendPong(object):
@@ -96,11 +104,21 @@ class SendPong(object):
         except KeyboardInterrupt:
             pass
 
+    def __pong_to_dct(self, msg):
+
+        return {'ping_PID': int(msg.ping_PID),
+                'counter': int(msg.counter),
+                'pong_PID': int(msg.pong_PID),
+                'payload': str(msg.payload),
+                'pong_time': float(msg.pong_time)}
+
     def close(self):
 
         self.__run_event.clear()
         self.__thread.join()
         self.__lc.unsubscribe(self.__subscription)
+
+        self.__messages = [self.__pong_to_dct(msg) for msg in self.__messages]
 
 
 class LogPingPong(object):
