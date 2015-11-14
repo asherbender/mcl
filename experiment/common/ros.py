@@ -14,9 +14,14 @@ from .common import format_ping_pongs
 
 class SendPing(object):
 
+    @property
+    def messages(self):
+        return self.__messages
+
     def __init__(self, ID):
 
         # Create publisher.
+        self.__messages = list()
         rospy.init_node('pinger_%i' % ID, anonymous=True)
         self.__publisher = rospy.Publisher('ping', String, queue_size=100)
 
@@ -26,6 +31,7 @@ class SendPing(object):
         try:
             ping = create_ping(PID, counter, payload)
             self.__publisher.publish(msgpack.dumps(ping))
+            self.__messages.append(ping)
         except rospy.ROSException:
             pass
 
@@ -35,9 +41,14 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
+    @property
+    def messages(self):
+        return self.__messages
+
+    def __init__(self, PID, ID, broadcasters, verbose):
 
         # Create message listener and broadcaster for Pings and Pongs.
+        self.__messages = list()
         rospy.init_node('ponger_%i' % ID, anonymous=True)
         self.__broadcaster = rospy.Publisher('pong', String, queue_size=100)
 
@@ -49,13 +60,14 @@ class SendPong(object):
                 ping = msgpack.loads(data.data)
                 pong = create_pong(PID, ping)
                 self.__broadcaster.publish(msgpack.dumps(pong))
+                self.__messages.append(pong)
             except rospy.ROSException:
                 pass
 
             if verbose:
                 s = 'PID %4i (ros): sent pong message %i'
                 s = s % (PID, pong['counter'])
-                print_if(verbose, s, max_chars)
+                print_if(verbose, s)
 
         self.__listener = rospy.Subscriber('ping', String, callback)
 

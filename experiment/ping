@@ -61,9 +61,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', default=False,
                         help=msg)
 
-    msg = 'Maximum number of character to print to the screen.'
-    parser.add_argument('--length', type=int, help=msg, default=None)
-
     # Get arguments from the command-line.
     args = parser.parse_args()
 
@@ -94,6 +91,7 @@ if __name__ == '__main__':
 
     # Create event for controlling execution of processes.
     start_event = multiprocessing.Event()
+    ping_queues = [multiprocessing.Queue() for i in range(args.broadcasters)]
     start_event.clear()
 
     # Create process for broadcasting PingMessages()
@@ -102,11 +100,11 @@ if __name__ == '__main__':
         pinger = multiprocessing.Process(target=ping,
                                          args=(SendPing, i,
                                                start_event,
+                                               ping_queues[i],
                                                payload,
                                                delay,
                                                args.transport,
-                                               args.verbose,
-                                               args.length))
+                                               args.verbose))
 
         # Start the broadcasting process.
         processes.append(pinger)
@@ -134,6 +132,7 @@ if __name__ == '__main__':
 
     # Allow processes to shut down correctly.
     for proc in processes:
+        ping_queues[i] = ping_queues[i].get()
         proc.join()
 
     print 'Pings stopped...'

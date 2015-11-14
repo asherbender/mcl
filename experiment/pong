@@ -54,9 +54,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', default=False,
                         help=msg)
 
-    msg = 'Maximum number of character to print to the screen.'
-    parser.add_argument('--length', type=int, help=msg, default=None)
-
     # Get arguments from the command-line.
     args = parser.parse_args()
 
@@ -81,6 +78,7 @@ if __name__ == '__main__':
 
     # Create event for controlling execution of processes.
     start_event = multiprocessing.Event()
+    pong_queues = [multiprocessing.Queue() for i in range(args.listeners)]
     start_event.clear()
 
     # Create process for broadcasting PongMessages()
@@ -93,8 +91,7 @@ if __name__ == '__main__':
                                                        args.broadcasters,
                                                        start_event,
                                                        args.transport,
-                                                       args.verbose,
-                                                       args.length)))
+                                                       args.verbose)))
 
     # Launch a number of 'ponger' listeners.
     else:
@@ -103,9 +100,9 @@ if __name__ == '__main__':
                                                      args=(SendPong, i,
                                                            args.broadcasters,
                                                            start_event,
+                                                           pong_queues[i],
                                                            args.transport,
-                                                           args.verbose,
-                                                           args.length)))
+                                                           args.verbose)))
 
     # Start the listeners.
     for process in processes:
@@ -132,7 +129,8 @@ if __name__ == '__main__':
             break
 
     # Allow processes to shut down correctly.
-    for proc in processes:
+    for i, proc in enumerate(processes):
+        pong_queues[i] = pong_queues[i].get()
         proc.join()
 
     print 'Pongs stopped...'

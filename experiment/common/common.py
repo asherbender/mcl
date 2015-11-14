@@ -23,7 +23,7 @@ def get_hostname():
     return hostname
 
 
-def print_if(verbose, string, max_chars):
+def print_if(verbose, string, max_chars=None):
     """Conditionally print string to std.out
 
     Args:
@@ -146,19 +146,19 @@ def create_pong(PID, ping):
             'pong_time': time.time()}
 
 
-def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr):
+def ping(SendPing, ID, start_event, queue, payload, delay, transport, verbose):
     """Standardised function for broadcasting ping messages.
 
     Args:
       SendPing (object): Object for sending ping messages.
       ID (int): ID of this ping thread/process.
       start_event (multiprocessing.Event): Flag for terminating pings.
+      queue (multiprocessing.Queue): Queue for communicating ping counts.
       payload (str): payload to send in ping messages.
       delay (float): delay between ping messages.
       transport (str): name of transport.
       verbose (bool): if set to `True` a message will be printed for each ping
           transmitted.
-      max_chr (int): maximum number of characters to print to the screen.
 
     """
 
@@ -171,7 +171,7 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
     ping = SendPing(ID)
 
     # Wait until start event has been triggered.
-    print_if(verbose, 'PID %4i: starting pings' % PID, max_chr)
+    print_if(verbose, 'PID %4i: starting pings' % PID)
     while not start_event.is_set():
         pass
 
@@ -186,7 +186,7 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
             if verbose:
                 msg = 'PID %4i (%s): sent ping message %i'
                 msg = msg % (PID, transport, counter)
-                print_if(verbose, msg, max_chr)
+                print_if(verbose, msg)
 
             counter += 1
 
@@ -201,24 +201,23 @@ def ping(SendPing, ID, start_event, payload, delay, transport, verbose, max_chr)
     except Exception as e:
         print str(e)
 
-    print counter
-
     ping.close()
-    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
+    queue.put(ping.messages)
+    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport))
 
 
-def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
+def pong(SendPong, ID, broadcasters, start_event, queue, transport, verbose):
     """Standardised function for broadcasting pong messages.
 
     Args:
       SendPong (object): Object for sending pong messages.
       ID (int): ID of this pong thread/process.
       broadcasters (int): total number of broadcasters in the system.
-      start_event (multiprocessing.Event): Flag for terminating pongs.
+      start_event (multiprocessing.Event): Flag for terminating pongs
+      queue (multiprocessing.Queue): Queue for communicating pong counts.
       transport (str): name of transport.
       verbose (bool): if set to `True` a message will be printed for each pong
           transmitted.
-      max_chr (int): maximum number of characters to print to the screen.
 
     """
 
@@ -228,11 +227,11 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
     set_process_name(proc_name)
 
     # Create message broadcaster for pong messages.
-    ponger = SendPong(PID, ID, broadcasters, verbose, max_chr)
+    ponger = SendPong(PID, ID, broadcasters, verbose)
 
     # Wait until start event has been triggered.
     msg = 'PID %4i (%s): starting pongs' % (PID, transport)
-    print_if(verbose, msg, max_chr)
+    print_if(verbose, msg)
     while not start_event.is_set():
         pass
 
@@ -246,7 +245,8 @@ def pong(SendPong, ID, broadcasters, start_event, transport, verbose, max_chr):
         print str(e)
 
     ponger.close()
-    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport), max_chr)
+    queue.put(ponger.messages)
+    print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport))
 
 
 def log_ping_pong(LogPingPong, run_event, queue, transport, pingers, pongers):

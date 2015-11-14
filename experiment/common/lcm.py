@@ -16,7 +16,13 @@ LCM_ADDRESS = 'udpm://224.0.0.1:7667?ttl=1'
 
 class SendPing(object):
 
+    @property
+    def messages(self):
+        return self.__messages
+
     def __init__(self, ID):
+
+        self.__messages = list()
         self.__lc = lcm.LCM(LCM_ADDRESS)
 
     def publish(self, PID, counter, payload):
@@ -29,6 +35,7 @@ class SendPing(object):
 
         # Publish message.
         self.__lc.publish(PING_CHANNEL, ping.encode())
+        self.__messages.append(ping)
 
     def close(self):
         pass
@@ -36,8 +43,13 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
+    @property
+    def messages(self):
+        return self.__messages
 
+    def __init__(self, PID, ID, broadcasters, verbose):
+
+        self.__messages = list()
         self.__lc = lcm.LCM(LCM_ADDRESS)
 
         def callback(channel, data):
@@ -52,11 +64,12 @@ class SendPong(object):
             pong.pong_time = time.time()
 
             self.__lc.publish(PONG_CHANNEL, pong.encode())
+            self.__messages.append(pong)
 
             if verbose:
                 s = 'PID %4i (LCM): sent pong message %i'
                 s = s % (PID, pong.counter)
-                print_if(verbose, s, max_chars)
+                print_if(verbose, s)
 
         self.__subscription = self.__lc.subscribe(PING_CHANNEL, callback)
 

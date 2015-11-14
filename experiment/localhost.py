@@ -12,7 +12,6 @@ import argparse
 import textwrap
 import multiprocessing
 from bz2 import BZ2File
-from collections import OrderedDict
 
 from common.common import ping
 from common.common import pong
@@ -58,9 +57,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', default=False,
                         help=msg)
 
-    msg = 'Maximum number of character to print to the screen.'
-    parser.add_argument('--length', type=int, help=msg, default=None)
-
     # Get arguments from the command-line.
     args = parser.parse_args()
 
@@ -91,6 +87,8 @@ if __name__ == '__main__':
 
     # Create event for controlling execution of processes.
     logger_queue = multiprocessing.Queue()
+    ping_messages = multiprocessing.Queue()
+    pong_messages = [multiprocessing.Queue() for i in range(args.listeners)]
     logger_run_event = multiprocessing.Event()
     pong_start_event = multiprocessing.Event()
     ping_start_event = multiprocessing.Event()
@@ -121,9 +119,9 @@ if __name__ == '__main__':
         ponger = multiprocessing.Process(target=pong,
                                          args=(transport.SendPong, i, 1,
                                                pong_start_event,
+                                               pong_messages[i],
                                                args.transport,
-                                               args.verbose,
-                                               args.length))
+                                               args.verbose))
 
         # Start the broadcasting process.
         pongers.append(ponger)
@@ -143,11 +141,11 @@ if __name__ == '__main__':
     pinger = multiprocessing.Process(target=ping,
                                      args=(transport.SendPing, 0,
                                            ping_start_event,
+                                           ping_messages,
                                            payload,
                                            delay,
                                            args.transport,
-                                           args.verbose,
-                                           args.length))
+                                           args.verbose))
 
     # Start the broadcasting process.
     print 'Starting pings...'
@@ -181,12 +179,15 @@ if __name__ == '__main__':
     pong_start_event.clear()
 
     # Shutdown pinger.
+    ping_messages = ping_messages.get()
     pinger.join()
     print 'Pings stopped.'
 
     # Shutdown pongers.
-    for ponger in pongers:
+    for i, ponger in enumerate(pongers):
+        pong_messages[i] = pong_messages[i].get()
         ponger.join()
+    pong_messages = sum([len(lst) for lst in pong_messages])
     print 'Pongs stopped.'
 
     # The payload is replicated across all messages. Duplicating the payload
@@ -204,4 +205,5 @@ if __name__ == '__main__':
     with BZ2File(args.fname, 'w') as f:
         pickle.dump(data, f, protocol=2)
 
-    print 'Pings sent %i. Pongs received %i.' % (len(pings), len(pongs))
+    print 'Pings sent %i. Pings logged %i.' % (len(ping_messages), len(pings))
+    print 'Pongs sent %i. Pongs logged %i.' % (pong_messages, len(pongs))

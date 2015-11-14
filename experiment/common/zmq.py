@@ -35,9 +35,14 @@ def create_pong_address(ip, port, ID):
 
 class SendPing(object):
 
+    @property
+    def messages(self):
+        return self.__messages
+
     def __init__(self, ID):
 
         # Create socket.
+        self.__messages = list()
         self.__context = zmq.Context()
         self.__socket = self.__context.socket(zmq.PUB)
         self.__socket.bind(create_ping_address(ZMQ_PING, BASE_PORT, ID))
@@ -47,6 +52,7 @@ class SendPing(object):
         # Publish 'ping' message.
         ping = create_ping(PID, counter, payload)
         self.__socket.send(msgpack.dumps(ping))
+        self.__messages.append(ping)
 
     def close(self):
 
@@ -56,24 +62,31 @@ class SendPing(object):
 
 class SendPong(object):
 
-    def __init__(self, PID, ID, broadcasters, verbose, max_chars):
+    @property
+    def messages(self):
+        return self.__messages
+
+    def __init__(self, PID, ID, broadcasters, verbose):
 
         # Create event for terminating event loop.
+        self.__messages = list()
+        self.__message_queue = Queue.Queue()
         self.__run_event = threading.Event()
         self.__run_event.set()
 
         # Create thread for handling event loop.
         self.__thread = threading.Thread(target=self.__event_loop,
-                                         args=(self.__run_event, PID, ID,
-                                               broadcasters,
-                                               verbose, max_chars))
+                                         args=(self.__run_event,
+                                               self.__message_queue, PID, ID,
+                                               broadcasters, verbose))
         self.__thread.daemon = True
         self.__thread.start()
 
     @staticmethod
-    def __event_loop(run_event, PID, ID, broadcasters, verbose, max_chars):
+    def __event_loop(run_event, queue, PID, ID, broadcasters, verbose):
 
         # Create socket for receiving ping messages.
+        messages = list()
         context = zmq.Context()
         ping_socket = context.socket(zmq.SUB)
         ping_socket.setsockopt(zmq.SUBSCRIBE, '')
@@ -99,11 +112,12 @@ class SendPong(object):
                     ping = msgpack.loads(payload)
                     pong = create_pong(PID, ping)
                     pong_socket.send(msgpack.dumps(pong))
+                    messages.append(pong)
 
                     if verbose:
                         s = 'PID %4i (ZMQ): sent pong message %i'
                         s = s % (PID, pong['counter'])
-                        print_if(verbose, s, max_chars)
+                        print_if(verbose, s)
 
         except KeyboardInterrupt:
             pass
@@ -111,10 +125,12 @@ class SendPong(object):
         ping_socket.close()
         pong_socket.close()
         context.term()
+        queue.put(messages)
 
     def close(self):
 
         self.__run_event.clear()
+        self.__messages = self.__message_queue.get()
         self.__thread.join()
 
 

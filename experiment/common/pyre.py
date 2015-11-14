@@ -21,9 +21,14 @@ zmq.AGAIN = zmq.Again
 
 class SendPing(object):
 
+    @property
+    def messages(self):
+        return self.__messages
+
     def __init__(self, ID):
 
         # Creates a new Zyre node and join 'ping' group.
+        self.__messages = list()
         self.__node = pyre.Pyre()
         self.__node.join(PING_GROUP)
         self.__node.start()
@@ -33,6 +38,7 @@ class SendPing(object):
         # Publish 'ping' message.
         ping = create_ping(PID, counter, payload)
         self.__node.shout(PING_GROUP, msgpack.dumps(ping))
+        self.__messages.append(ping)
 
     def close(self):
 
@@ -42,19 +48,27 @@ class SendPing(object):
 
 class SendPong(object):
 
+    @property
+    def messages(self):
+        return self.__messages
+
     def __init__(self, PID, ID, broadcasters, verbose, max_chars):
 
+        self.__messages = list()
+        self.__message_queue = Queue.Queue()
         self.__ctx = zmq.Context()
         self.__pipe = zhelper.zthread_fork(self.__ctx,
                                            self.__event_loop,
+                                           self.__message_queue,
                                            PID,
                                            verbose,
                                            max_chars)
 
     @staticmethod
-    def __event_loop(ctx, pipe, PID, verbose, max_chars):
+    def __event_loop(ctx, pipe, queue, PID, verbose, max_chars):
 
         # Creates a new Zyre node and join 'ping' group.
+        messages = 0
         node = pyre.Pyre(ctx=ctx)
         node.join(PING_GROUP)
         node.start()
@@ -76,6 +90,7 @@ class SendPong(object):
                         ping = msgpack.loads(payload[-1])
                         pong = create_pong(PID, ping)
                         node.shout(PONG_GROUP, msgpack.dumps(pong))
+                        messages.append(pong)
 
                         if verbose:
                             s = 'PID %4i (pyre): sent pong message %i'
@@ -93,10 +108,12 @@ class SendPong(object):
 
         # Close connection.
         node.stop()
+        queue.put(messages)
 
     def close(self):
 
         self.__pipe.send("$$STOP".encode('utf_8'))
+        self.__messages = self.__message_queue.get()
 
 
 class LogPingPong(object):
