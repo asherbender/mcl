@@ -5,7 +5,7 @@ import numpy as np
 from collections import OrderedDict
 
 ISO_FMT = '%Y-%m-%dT%H:%M:%S.%f'
-LOCALHOST = True
+LOCALHOST = False
 
 
 def get_hostname():
@@ -202,7 +202,7 @@ def ping(SendPing, ID, start_event, queue, payload, delay, transport, verbose):
         print str(e)
 
     ping.close()
-    queue.put(ping.messages)
+    queue.put(counter)
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport))
 
 
@@ -245,7 +245,7 @@ def pong(SendPong, ID, broadcasters, start_event, queue, transport, verbose):
         print str(e)
 
     ponger.close()
-    queue.put(ponger.messages)
+    queue.put(ponger.counter)
     print_if(verbose, 'PID %4i (%s): exiting' % (PID, transport))
 
 

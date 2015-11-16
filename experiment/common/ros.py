@@ -14,14 +14,9 @@ from .common import format_ping_pongs
 
 class SendPing(object):
 
-    @property
-    def messages(self):
-        return self.__messages
-
     def __init__(self, ID):
 
         # Create publisher.
-        self.__messages = list()
         rospy.init_node('pinger_%i' % ID, anonymous=True)
         self.__publisher = rospy.Publisher('ping', String, queue_size=100)
 
@@ -31,7 +26,6 @@ class SendPing(object):
         try:
             ping = create_ping(PID, counter, payload)
             self.__publisher.publish(msgpack.dumps(ping))
-            self.__messages.append(ping)
         except rospy.ROSException:
             pass
 
@@ -42,13 +36,13 @@ class SendPing(object):
 class SendPong(object):
 
     @property
-    def messages(self):
-        return self.__messages
+    def counter(self):
+        return self.__counter
 
     def __init__(self, PID, ID, broadcasters, verbose):
 
         # Create message listener and broadcaster for Pings and Pongs.
-        self.__messages = list()
+        self.__counter = 0
         rospy.init_node('ponger_%i' % ID, anonymous=True)
         self.__broadcaster = rospy.Publisher('pong', String, queue_size=100)
 
@@ -60,7 +54,7 @@ class SendPong(object):
                 ping = msgpack.loads(data.data)
                 pong = create_pong(PID, ping)
                 self.__broadcaster.publish(msgpack.dumps(pong))
-                self.__messages.append(pong)
+                self.__counter += 1
             except rospy.ROSException:
                 pass
 

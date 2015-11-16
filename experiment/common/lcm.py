@@ -16,13 +16,8 @@ LCM_ADDRESS = 'udpm://224.0.0.1:7667?ttl=1'
 
 class SendPing(object):
 
-    @property
-    def messages(self):
-        return self.__messages
-
     def __init__(self, ID):
 
-        self.__messages = list()
         self.__lc = lcm.LCM(LCM_ADDRESS)
 
     def publish(self, PID, counter, payload):
@@ -35,29 +30,20 @@ class SendPing(object):
 
         # Publish message.
         self.__lc.publish(PING_CHANNEL, ping.encode())
-        self.__messages.append(ping)
-
-    def __ping_to_dct(self, msg):
-
-        return {'ping_PID': int(msg.ping_PID),
-                'counter': int(msg.counter),
-                'payload': str(msg.payload),
-                'ping_time': float(msg.ping_time)}
 
     def close(self):
-
-        self.__messages = [self.__ping_to_dct(msg) for msg in self.__messages]
+        pass
 
 
 class SendPong(object):
 
     @property
-    def messages(self):
-        return self.__messages
+    def counter(self):
+        return self.__counter
 
     def __init__(self, PID, ID, broadcasters, verbose):
 
-        self.__messages = list()
+        self.__counter = 0
         self.__lc = lcm.LCM(LCM_ADDRESS)
 
         def callback(channel, data):
@@ -72,7 +58,7 @@ class SendPong(object):
             pong.pong_time = time.time()
 
             self.__lc.publish(PONG_CHANNEL, pong.encode())
-            self.__messages.append(pong)
+            self.__counter += 1
 
             if verbose:
                 s = 'PID %4i (LCM): sent pong message %i'
@@ -104,21 +90,11 @@ class SendPong(object):
         except KeyboardInterrupt:
             pass
 
-    def __pong_to_dct(self, msg):
-
-        return {'ping_PID': int(msg.ping_PID),
-                'counter': int(msg.counter),
-                'pong_PID': int(msg.pong_PID),
-                'payload': str(msg.payload),
-                'pong_time': float(msg.pong_time)}
-
     def close(self):
 
         self.__run_event.clear()
         self.__thread.join()
         self.__lc.unsubscribe(self.__subscription)
-
-        self.__messages = [self.__pong_to_dct(msg) for msg in self.__messages]
 
 
 class LogPingPong(object):

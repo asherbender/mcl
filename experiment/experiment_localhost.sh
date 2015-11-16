@@ -4,7 +4,6 @@ clear
 TIME=10
 DIR=./data/localhost/
 mkdir -p ${DIR}
-mkdir -p ${DIR}/process
 
 # A data collection time of 10 seconds will result in:
 #

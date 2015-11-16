@@ -189,7 +189,7 @@ if __name__ == '__main__':
     for i, ponger in enumerate(pongers):
         pong_messages[i] = pong_messages[i].get()
         ponger.join()
-    pong_messages = sum([lst for lst in pong_messages], [])
+    pong_messages = sum(pong_messages)
     print 'Pongs stopped.'
 
     # The payload is replicated across all messages. Duplicating the payload
@@ -213,12 +213,5 @@ if __name__ == '__main__':
     with BZ2File(os.path.join(args.output, fname), 'w') as f:
         pickle.dump(data, f, protocol=2)
 
-    # Write process data to file.
-    data = dict()
-    data['pings'] = pings_to_dict(ping_messages)
-    data['pongs'] = pongs_to_dict(pong_messages)
-    with BZ2File(os.path.join(args.output, 'process', fname), 'w') as f:
-        pickle.dump(data, f, protocol=2)
-
-    print 'Pings sent %i. Pings logged %i.' % (len(ping_messages), len(pings))
-    print 'Pongs sent %i. Pongs logged %i.' % (len(pong_messages), len(pongs))
+    print 'Pings sent %i. Pings logged %i.' % (ping_messages, len(pings))
+    print 'Pongs sent %i. Pongs logged %i.' % (pong_messages, len(pongs))

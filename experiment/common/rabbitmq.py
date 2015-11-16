@@ -108,13 +108,8 @@ class Listener(object):
 
 class SendPing(object):
 
-    @property
-    def messages(self):
-        return self.__messages
-
     def __init__(self, ID):
 
-        self.__messages = list()
         self.__publisher = Publisher(HOSTNAME,
                                      USERNAME,
                                      PASSWORD,
@@ -125,21 +120,21 @@ class SendPing(object):
         # Publish 'ping' message.
         ping = create_ping(PID, counter, payload)
         self.__publisher.publish(msgpack.dumps(ping), 'ping')
-        self.__messages.append(ping)
 
     def close(self):
+
         self.__publisher.close()
 
 
 class SendPong(object):
 
     @property
-    def messages(self):
-        return self.__messages
+    def counter(self):
+        return self.__counter
 
     def __init__(self, PID, ID, broadcasters, verbose):
 
-        self.__messages = list()
+        self.__counter = 0
         self.__publisher = Publisher(HOSTNAME,
                                      USERNAME,
                                      PASSWORD,
@@ -151,7 +146,7 @@ class SendPong(object):
             ping = msgpack.loads(payload)
             pong = create_pong(PID, ping)
             self.__publisher.publish(msgpack.dumps(pong), 'pong')
-            self.__messages.append(pong)
+            self.__counter += 1
 
             if verbose:
                 s = 'PID %4i (rabbitmq): sent pong message %i'
@@ -165,6 +160,7 @@ class SendPong(object):
                                    callback, 'ping')
 
     def close(self):
+
         self.__publisher.close()
         self.__listener.close()
 
