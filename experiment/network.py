@@ -6,17 +6,19 @@
 
 """
 
+import os
 import time
 import pickle
 import argparse
-import datetime
 import textwrap
 import multiprocessing
 from bz2 import BZ2File
-from collections import OrderedDict
 
 from common.common import ping
 from common.common import make_payload
+from common.common import log_ping_pong
+from common.common import pings_to_dict
+from common.common import pongs_to_dict
 
 
 if __name__ == '__main__':
@@ -32,8 +34,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=formatter_class,
                                      description=textwrap.dedent(man))
 
-    msg = 'Path to log data.'
-    parser.add_argument('fname', help=msg)
+    msg = 'Directory to log data.'
+    parser.add_argument('output', help=msg)
 
     msg = 'Number of listeners to launch.'
     parser.add_argument('--listeners', type=int, help=msg, default=1)
@@ -54,9 +56,6 @@ if __name__ == '__main__':
     msg = 'Print  messages to screen.'
     parser.add_argument('--verbose', action='store_true', default=False,
                         help=msg)
-
-    msg = 'Maximum number of character to print to the screen.'
-    parser.add_argument('--length', type=int, help=msg, default=None)
 
     # Get arguments from the command-line.
     args = parser.parse_args()
@@ -87,23 +86,41 @@ if __name__ == '__main__':
     payload = make_payload(args.packet)
 
     # Create event for controlling execution of processes.
+    logger_queue = multiprocessing.Queue()
+    ping_messages = multiprocessing.Queue()
+    logger_run_event = multiprocessing.Event()
     ping_start_event = multiprocessing.Event()
     ping_start_event.clear()
+    logger_run_event.set()
 
-    # Start logging pings and pongs.
-    print 'Logging messages...'
-    logger = transport.LogPingPong(1, args.listeners)
-    time.sleep(0.1)
+    # -------------------------------------------------------------------------
+    #                      Log ping and pong messages
+    # -------------------------------------------------------------------------
+    logger = multiprocessing.Process(target=log_ping_pong,
+                                     args=(transport.LogPingPong,
+                                           logger_run_event,
+                                           logger_queue,
+                                           args.transport,
+                                           1, args.listeners))
+
+    # Start the logging process.
+    logger.daemon = False
+    logger.start()
+    time.sleep(1.0)
+
+    # -------------------------------------------------------------------------
+    #                        Broadcast PingMessage()
+    # -------------------------------------------------------------------------
 
     # Create process for broadcasting PingMessages()
     pinger = multiprocessing.Process(target=ping,
                                      args=(transport.SendPing, 0,
                                            ping_start_event,
+                                           ping_messages,
                                            payload,
                                            delay,
                                            args.transport,
-                                           args.verbose,
-                                           args.length))
+                                           args.verbose))
 
     # Start the broadcasting process.
     print 'Starting pings...'
@@ -112,33 +129,54 @@ if __name__ == '__main__':
     time.sleep(0.1)
     ping_start_event.set()
 
+    # -------------------------------------------------------------------------
+    #                      Wait for experiment to end
+    # -------------------------------------------------------------------------
+
     # Wait for the user to terminate the process or timeout.
-    start_time = datetime.datetime.utcnow()
+    start_time = time.time()
     while True:
         try:
             time.sleep(0.1)
 
             if (args.time is not None):
-                elapsed_time = datetime.datetime.utcnow() - start_time
-                if elapsed_time.total_seconds() > args.time:
+                if time.time() - start_time > args.time:
                     break
 
         except KeyboardInterrupt:
             break
 
-    # Shutdown pinger.
+    # -------------------------------------------------------------------------
+    #                           Shutdown services
+    # -------------------------------------------------------------------------
+    logger_run_event.clear()
     ping_start_event.clear()
+
+    # Shutdown pinger.
+    ping_messages = ping_messages.get()
     pinger.join()
-    logger.close()
-    print 'Stopped logging messages'
+    print 'Pings stopped.'
 
     # The payload is replicated across all messages. Duplicating the payload
     # does not aid analysis. To save significant space, the payload is removed
     # from the messages.
-    data = OrderedDict()
-    data['pings'] = logger.pings
-    data['pongs'] = logger.pongs
+    pings = logger_queue.get()
+    pongs = logger_queue.get()
+    logger.join()
+    print 'Stopped logging messages'
 
-    # Write data to file.
-    with BZ2File(args.fname, 'w') as f:
+    # Create name of file.
+    fname = '%s_%i_%i_%1.3f.pkl' % (args.transport,
+                                    args.packet,
+                                    args.listeners,
+                                    args.rate)
+
+    # Write logged data to file.
+    data = dict()
+    data['pings'] = pings_to_dict(pings)
+    data['pongs'] = pongs_to_dict(pongs)
+    with BZ2File(os.path.join(args.output, fname), 'w') as f:
         pickle.dump(data, f, protocol=2)
+
+    print 'Pings sent %i. Pings logged %i.' % (ping_messages, len(pings))
+    print 'Pongs logged %i.' % len(pongs)

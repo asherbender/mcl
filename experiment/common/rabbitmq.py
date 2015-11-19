@@ -1,22 +1,26 @@
 from __future__ import absolute_import
 
+import pika
 import time
+import Queue
 import msgpack
 import threading
 import multiprocessing
-from amqpstorm import Connection
 
-from .common import LOCALHOST
 from .common import print_if
 from .common import create_ping
 from .common import create_pong
 from .common import format_ping_pongs
 
 PORT = 5672
+LOCALHOST = True
 if LOCALHOST:
     HOSTNAME = 'localhost'
 else:
     HOSTNAME = '10.0.0.100'
+
+PING_TOPIC = 'ping'
+PONG_TOPIC = 'pong'
 PING_EXCHANGE = 'ping-pong'
 PONG_EXCHANGE = 'ping-pong'
 
@@ -24,106 +28,80 @@ USERNAME = 'test'
 PASSWORD = 'test'
 
 
-class Publisher(object):
+def create_channel(exchange_name):
 
-    def __init__(self, host, username, password, exchange_name):
-        self.channel = None
-        self.connection = None
-        self.host = host
-        self.username = username
-        self.password = password
-        self.__exchange_name = exchange_name
-        self.connect()
-
-    def connect(self):
-
-        self.connection = Connection(self.host, self.username, self.password)
-        self.channel = self.connection.channel()
-        self.channel.exchange.declare(self.__exchange_name,
-                                      exchange_type='topic')
-
-    def publish(self, message, topic=''):
-
-        try:
-            self.channel.basic.publish(message, topic,
-                                       exchange=self.__exchange_name,
-                                       mandatory=False,
-                                       immediate=False)
-        except:
-            pass
-
-    def close(self):
-        self.channel.close()
-        self.connection.close()
-
-
-class Listener(object):
-
-    def __init__(self, host, username, password, exchange_name, callback,
-                 topic=''):
-
-        self.__callback = callback
+        # Create connection parameters.
+        credentials = pika.PlainCredentials(USERNAME, PASSWORD)
+        parameters = pika.ConnectionParameters(host=HOSTNAME,
+                                               port=PORT,
+                                               credentials=credentials)
 
         # Create connection.
-        self.__connection = Connection(host, username, password)
+        connection = pika.BlockingConnection(parameters)
 
-        # Create channel and declare exchange.
-        self.__channel = self.__connection.channel()
-        self.__channel.basic.qos(prefetch_count=65535)
-        self.__channel.exchange.declare(exchange_name,
-                                        exchange_type='topic')
+        # Establish channel.
+        channel = connection.channel()
+        channel.exchange_declare(exchange=exchange_name,
+                                 exchange_type='topic')
 
-        # Create queue and bind to exchange.
-        queue = self.__channel.queue.declare(exclusive=True)
-        self.__queue = queue['queue']
-        self.__channel.queue.bind(exchange=exchange_name,
-                                  queue=self.__queue,
-                                  routing_key=topic)
+        return connection, channel
 
-        # Assign callback for consuming messages.
-        self.__channel.basic.consume(self.__on_message,
-                                     queue=self.__queue,
-                                     no_ack=True)
 
-        # Start processing messages.
-        self.__thread = threading.Thread(target=self.__start_IO_loop)
-        self.__thread.daemon = True
-        self.__thread.start()
+def create_queue(channel, exchange_name, routing_key=''):
 
-    def __start_IO_loop(self):
+    # Create queue for ping messages.
+    result = channel.queue_declare(exclusive=True, auto_delete=True)
+    queue_name = result.method.queue
 
+    # Bind queue to exchange.
+    channel.queue_bind(exchange=exchange_name, queue=queue_name,
+                       routing_key=routing_key)
+
+    return queue_name
+
+
+def channel_get(channel, queue_name):
+
+    method, header, payload = channel.basic_get(queue=queue_name)
+
+    if method:
+        channel.basic_ack(delivery_tag=method.delivery_tag, multiple=True)
+        return payload
+    else:
+        return None
+
+
+def empty_channel(channel, queue_name):
+
+    while True:
         try:
-            self.__channel.start_consuming()
-        except:
-            pass
-
-    def __on_message(self, body, channel, header, properties):
-
-        self.__callback(body)
-
-    def close(self):
-        self.__connection.close()
-        self.__thread.join()
+            for meth, props, data in channel.consume(queue_name,
+                                                     inactivity_timeout=1):
+                if data:
+                    channel.basic_ack(delivery_tag=meth.delivery_tag,
+                                      multiple=True)
+        except TypeError:
+            break
 
 
 class SendPing(object):
 
     def __init__(self, ID):
 
-        self.__publisher = Publisher(HOSTNAME,
-                                     USERNAME,
-                                     PASSWORD,
-                                     PING_EXCHANGE)
+        # Create connection and channel.
+        self.__connection, self.__channel = create_channel(PING_EXCHANGE)
 
     def publish(self, PID, counter, payload):
 
         # Publish 'ping' message.
         ping = create_ping(PID, counter, payload)
-        self.__publisher.publish(msgpack.dumps(ping), 'ping')
+        self.__channel.publish(exchange=PING_EXCHANGE,
+                               routing_key='ping',
+                               body=msgpack.dumps(ping))
 
     def close(self):
-
-        self.__publisher.close()
+        self.__channel.close()
+        self.__connection.close()
 
 
 class SendPong(object):
@@ -135,34 +113,80 @@ class SendPong(object):
     def __init__(self, PID, ID, broadcasters, verbose):
 
         self.__counter = 0
-        self.__publisher = Publisher(HOSTNAME,
-                                     USERNAME,
-                                     PASSWORD,
-                                     PONG_EXCHANGE)
 
-        def callback(payload):
+        # Create event for terminating event loop.
+        self.__queue = Queue.Queue()
+        self.__run_event = threading.Event()
+        self.__run_event.set()
 
-            # Publish 'pong' message.
-            ping = msgpack.loads(payload)
-            pong = create_pong(PID, ping)
-            self.__publisher.publish(msgpack.dumps(pong), 'pong')
-            self.__counter += 1
+        # Create thread for handling event loop.
+        self.__event_loop = threading.Thread(target=self.__event_loop,
+                                             args=(self.__run_event,
+                                                   self.__queue, PID, verbose))
+        self.__event_loop.daemon = True
+        self.__event_loop.start()
 
-            if verbose:
-                s = 'PID %4i (rabbitmq): sent pong message %i'
-                s = s % (PID, pong['counter'])
-                print_if(verbose, s)
+    @staticmethod
+    def __event_loop(run_event, queue, PID, verbose):
 
-        self.__listener = Listener(HOSTNAME,
-                                   USERNAME,
-                                   PASSWORD,
-                                   PING_EXCHANGE,
-                                   callback, 'ping')
+        # Create connections and channels.
+        ping_connection, ping_channel = create_channel(PING_EXCHANGE)
+        pong_connection, pong_channel = create_channel(PONG_EXCHANGE)
+
+        # Create queue for receiving ping messages.
+        queue_name = create_queue(ping_channel, PING_EXCHANGE, PING_TOPIC)
+
+        # Wait for data
+        counter = 0
+        while run_event.is_set():
+            try:
+                for meth, props, payload in ping_channel.consume(queue_name,
+                                                                 inactivity_timeout=0.1):
+                    if payload and run_event.is_set():
+                        # Publish 'pong' message.
+                        ping = msgpack.loads(payload)
+                        pong = create_pong(PID, ping)
+                        pong_channel.publish(exchange=PONG_EXCHANGE,
+                                             routing_key='pong',
+                                             body=msgpack.dumps(pong))
+
+                        ping_channel.basic_ack(delivery_tag=meth.delivery_tag,
+                                               multiple=True)
+
+                        counter += 1
+
+                        if verbose:
+                            s = 'PID %4i (rabbitmq): sent pong message %i'
+                            s = s % (PID, pong['counter'])
+                            print_if(verbose, s)
+
+            except TypeError:
+                pass
+
+            except KeyboardInterrupt:
+                break
+
+        # Attempt to empty channel of data.
+        ping_channel.queue_purge(queue=queue_name)
+        empty_channel(ping_channel, queue_name)
+
+        # Close connections.
+        try:
+            ping_channel.queue_purge(queue=queue_name)
+            ping_channel.queue_delete(queue=queue_name)
+            ping_channel.close()
+            ping_connection.close()
+            pong_channel.close()
+            pong_connection.close()
+        except:
+            pass
+        queue.put(counter)
 
     def close(self):
 
-        self.__publisher.close()
-        self.__listener.close()
+        self.__run_event.clear()
+        self.__event_loop.join()
+        self.__counter = self.__queue.get()
 
 
 class LogPingPong(object):
@@ -183,59 +207,85 @@ class LogPingPong(object):
 
     def __init__(self, broadcasters, listeners):
 
-        self.__run_event = multiprocessing.Event()
         self.__pings = multiprocessing.Queue()
         self.__pongs = multiprocessing.Queue()
+
+        # Create event for terminating event loop.
+        self.__run_event = multiprocessing.Event()
         self.__run_event.set()
 
-        # Listen for pings.
-        self.__ping_listener = multiprocessing.Process(target=self.__listen,
-                                                       args=(PING_EXCHANGE,
-                                                             self.__pings,
-                                                             self.__run_event,
-                                                             'ping'))
-        self.__ping_listener.daemon = True
-        self.__ping_listener.start()
+        # Create thread for logging pings.
+        self.__ping_loop = multiprocessing.Process(target=self.__event_loop,
+                                                   args=(self.__run_event,
+                                                         PING_EXCHANGE,
+                                                         PING_TOPIC,
+                                                         self.__pings))
 
-        # Listen for pongs.
-        self.__pong_listener = multiprocessing.Process(target=self.__listen,
-                                                       args=(PONG_EXCHANGE,
-                                                             self.__pongs,
-                                                             self.__run_event,
-                                                             'pong'))
-        self.__pong_listener.daemon = True
-        self.__pong_listener.start()
+        # Create thread for logging pongs.
+        self.__pong_loop = multiprocessing.Process(target=self.__event_loop,
+                                                   args=(self.__run_event,
+                                                         PONG_EXCHANGE,
+                                                         PONG_TOPIC,
+                                                         self.__pongs))
+
+        self.__ping_loop.daemon = True
+        self.__pong_loop.daemon = True
+        self.__ping_loop.start()
+        self.__pong_loop.start()
 
     @staticmethod
-    def __listen(exchange_name, queue, run_event, topic):
+    def __event_loop(run_event, exchange_name, topic, queue):
 
+        # Create connections and channels.
+        connection, channel = create_channel(exchange_name)
+
+        # Create queue for receiving messages.
+        queue_name = create_queue(channel, exchange_name, topic)
+        time.sleep(0.25)
+        channel.queue_purge(queue=queue_name)
+
+        # Wait for messages.
         messages = list()
-        listener = Listener(HOSTNAME,
-                            USERNAME,
-                            PASSWORD,
-                            exchange_name,
-                            lambda msg: messages.append(msg), topic)
-
         while run_event.is_set():
-            time.sleep(0.1)
+            try:
+                for meth, props, payload in channel.consume(queue_name,
+                                                            inactivity_timeout=0.1):
+                    if payload and run_event.is_set():
+                        messages.append(payload)
+                        channel.basic_ack(delivery_tag=meth.delivery_tag,
+                                          multiple=True)
 
-        listener.close()
+            except TypeError:
+                pass
+
+            except KeyboardInterrupt:
+                break
+
+        # Attempt to empty channel of data.
+        channel.queue_purge(queue=queue_name)
+        empty_channel(channel, queue_name)
+
+        # Unpack messages.
+        messages = [msgpack.loads(message) for message in messages]
+
+        # Close connection.
+        channel.queue_purge(queue=queue_name)
+        channel.queue_delete(queue=queue_name)
+        channel.close()
+        connection.close()
+
+        # Dump data into queue.
         queue.put(messages)
 
     def close(self):
 
         # Stop listening for data.
         self.__run_event.clear()
+        time.sleep(0.1)
         self.__pings = self.__pings.get()
         self.__pongs = self.__pongs.get()
-        self.__ping_listener.join()
-        self.__pong_listener.join()
-
-        # RabbitMQ is the only transport that does not de-serialise the
-        # messages during logging. This has been done to try and improve the
-        # poor performance of RabbitMQ.
-        self.__pings = [msgpack.loads(ping) for ping in self.__pings]
-        self.__pongs = [msgpack.loads(pong) for pong in self.__pongs]
+        self.__ping_loop.join()
+        self.__pong_loop.join()
 
         # Ensure ping/pongs are stored in an identical format. Drop the payload
         # to save space.

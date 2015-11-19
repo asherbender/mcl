@@ -1,28 +1,30 @@
 #!/bin/bash
 
-TIME=10
+TIME=30
 LISTENERS=3
-TRANSPORT='mcl'
+TRANSPORT='ros'
+
+DIR=./data/network
+mkdir -p ${DIR}
 
 clear
-for PACKET in '4000' '2000' '1000'
+for PACKET in '1000'
 do
-    DIR=./data/network/${PACKET}
-    mkdir -p ${DIR}
-
-    for RATE in '0.01' '0.1' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
+    for RATE in '0.01' '1' '2' '3' '4' '5' '6' '7' '8' '9' '10' '11' '12' '13' '14' '15'
     do
-        FNAME=${DIR}/${TRANSPORT}_${LISTENERS}_${RATE}.pkl
         echo $TRANSPORT $PACKET $LISTENERS $RATE
 
-        ./network.py $FNAME                    \
+        ./network.py $DIR                      \
                      --listeners $LISTENERS    \
                      --packet $PACKET          \
                      --rate $RATE              \
                      --transport $TRANSPORT    \
                      --time $TIME
 
-        sleep 3
+        sleep 5
         echo ''
     done
+    sleep 10
 done
+
+echo -e "\a"

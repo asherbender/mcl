@@ -90,6 +90,7 @@ if __name__ == '__main__':
                                                  args=(SendPong, args.ID,
                                                        args.broadcasters,
                                                        start_event,
+                                                       pong_queues[0],
                                                        args.transport,
                                                        args.verbose)))
 
