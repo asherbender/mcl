@@ -1,8 +1,8 @@
 #!/bin/bash
 
-TIME=30
+TIME=10
 LISTENERS=3
-TRANSPORT='ros'
+TRANSPORT='mcl'
 
 DIR=./data/network
 mkdir -p ${DIR}

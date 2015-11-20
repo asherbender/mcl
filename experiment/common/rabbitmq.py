@@ -8,12 +8,12 @@ import threading
 import multiprocessing
 
 from .common import print_if
+from .common import LOCALHOST
 from .common import create_ping
 from .common import create_pong
 from .common import format_ping_pongs
 
 PORT = 5672
-LOCALHOST = True
 if LOCALHOST:
     HOSTNAME = 'localhost'
 else:
@@ -58,17 +58,6 @@ def create_queue(channel, exchange_name, routing_key=''):
                        routing_key=routing_key)
 
     return queue_name
-
-
-def channel_get(channel, queue_name):
-
-    method, header, payload = channel.basic_get(queue=queue_name)
-
-    if method:
-        channel.basic_ack(delivery_tag=method.delivery_tag, multiple=True)
-        return payload
-    else:
-        return None
 
 
 def empty_channel(channel, queue_name):
