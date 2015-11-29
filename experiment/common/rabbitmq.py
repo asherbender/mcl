@@ -67,8 +67,7 @@ def empty_channel(channel, queue_name):
             for meth, props, data in channel.consume(queue_name,
                                                      inactivity_timeout=1):
                 if data:
-                    channel.basic_ack(delivery_tag=meth.delivery_tag,
-                                      multiple=True)
+                    channel.basic_ack(delivery_tag=meth.delivery_tag)
         except TypeError:
             break
 
@@ -139,8 +138,7 @@ class SendPong(object):
                                              routing_key='pong',
                                              body=msgpack.dumps(pong))
 
-                        ping_channel.basic_ack(delivery_tag=meth.delivery_tag,
-                                               multiple=True)
+                        ping_channel.basic_ack(delivery_tag=meth.delivery_tag)
 
                         counter += 1
 
@@ -241,8 +239,7 @@ class LogPingPong(object):
                                                             inactivity_timeout=0.1):
                     if payload and run_event.is_set():
                         messages.append(payload)
-                        channel.basic_ack(delivery_tag=meth.delivery_tag,
-                                          multiple=True)
+                        channel.basic_ack(delivery_tag=meth.delivery_tag)
 
             except TypeError:
                 pass
